@@ -132,7 +132,7 @@ pipeline {
                         mvn deploy \
                             -DskipTests \
                             -s "$MAVEN_SETTINGS" \
-                            -DaltDeploymentRepository=deploymentRepo::${NEXUS_URL}/repository/maven-snapshots/
+                            -DaltDeploymentRepository=deploymentRepo::default::${NEXUS_URL}/repository/maven-snapshots/
                     '''
                 }
             }

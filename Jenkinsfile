@@ -90,7 +90,37 @@ pipeline {
             }
         }
 
-        stage('6. Deploy Snapshot to Nexus') {
+        stage('6. Build Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_TOKEN'
+                )]) {
+                    script {
+                        docker.build("${DOCKERHUB_USER}/eventsproject:${BUILD_NUMBER}")
+                    }
+                }
+            }
+        }
+
+        stage('7. Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_TOKEN'
+                )]) {
+                    script {
+                        docker.withRegistry('', 'dockerhub-credentials') {
+                            docker.image("${DOCKERHUB_USER}/eventsproject:${BUILD_NUMBER}").push()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('8. Deploy Snapshot to Nexus') {
             steps {
                 bat '''
                     @echo off
@@ -101,7 +131,7 @@ pipeline {
             }
         }
 
-        stage('7. Deploy Release to Nexus') {
+        stage('9. Deploy Release to Nexus') {
             when {
                 expression { params.DEPLOY_RELEASE }
             }

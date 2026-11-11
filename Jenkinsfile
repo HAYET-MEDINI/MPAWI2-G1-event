@@ -138,7 +138,7 @@ pipeline {
             }
         }
     
-        stage('7. Deploy Release to Nexus') {
+               stage('7. Deploy Release to Nexus') {
             steps {
                 echo '=== Deploy RELEASE to Nexus ==='
 
@@ -149,18 +149,18 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        // 1. On change la version pour enlever le -SNAPSHOT
+                        # 1. On change la version pour enlever le -SNAPSHOT
                         mvn versions:set \
                             -DnewVersion=1.0.0 \
                             -DgenerateBackupPoms=false
 
-                        // 2. On déploie vers le dépôt RELEASES
+                        # 2. On déploie vers le dépôt RELEASES
                         mvn deploy \
                             -DskipTests \
                             -s "$MAVEN_SETTINGS" \
                             -DaltDeploymentRepository=deploymentRepo::default::${NEXUS_URL}/repository/maven-releases/
                     '''
-                }  
+                }
             }
         }
     }

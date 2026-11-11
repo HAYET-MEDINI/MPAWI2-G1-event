@@ -176,17 +176,7 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            echo 'Pipeline Jenkins terminé avec succès.'
-        }
-        failure {
-            echo 'Le pipeline Jenkins a échoué. Consultez la Console Output.'
-        }
-        always {
-            echo 'Fin de l execution du pipeline.'
-        }
-    }
+   
 }
 
 

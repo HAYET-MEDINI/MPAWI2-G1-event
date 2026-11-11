@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -17,13 +16,11 @@ pipeline {
     }
 
     environment {
-        GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
-        GIT_BRANCH = 'mayssa'
-
-        SONAR_URL = 'http://sonarqube:9000'
+        GIT_REPO_URL      = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
+        GIT_BRANCH        = 'mayssa'
+        SONAR_URL         = 'http://sonarqube:9000'
         SONAR_PROJECT_KEY = 'eventsProject'
-
-        SNAPSHOT_VERSION = '1.0.0-SNAPSHOT'
+        SNAPSHOT_VERSION  = '1.0.0-SNAPSHOT'
     }
 
     stages {
@@ -38,22 +35,20 @@ pipeline {
         stage('2. Maven Clean & Compile') {
             steps {
                 sh 'chmod +x mvnw'
-                sh './mvnw -B -ntp clean compile'
+                sh './mvnw clean compile'
             }
         }
 
         stage('3. Unit Tests & JaCoCo') {
             steps {
-                sh './mvnw -B -ntp verify'
+                sh './mvnw verify'
             }
-
             post {
                 always {
                     junit(
                         allowEmptyResults: true,
                         testResults: '**/target/surefire-reports/*.xml'
                     )
-
                     archiveArtifacts(
                         allowEmptyArchive: true,
                         artifacts: '**/target/site/jacoco/**'
@@ -65,13 +60,10 @@ pipeline {
         stage('4. SonarQube Analysis') {
             steps {
                 withCredentials([
-                    string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
-                    )
+                    string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')
                 ]) {
                     sh '''
-                        ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                        ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
                         -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
                         -Dsonar.host.url="$SONAR_URL" \
                         -Dsonar.token="$SONAR_TOKEN"
@@ -82,9 +74,8 @@ pipeline {
 
         stage('5. Package JAR') {
             steps {
-                sh './mvnw -B -ntp package -DskipTests'
+                sh './mvnw package -DskipTests'
             }
-
             post {
                 success {
                     archiveArtifacts(
@@ -99,13 +90,10 @@ pipeline {
         stage('6. Deploy Snapshot to Nexus') {
             steps {
                 withCredentials([
-                    file(
-                        credentialsId: 'maven-settings',
-                        variable: 'MAVEN_SETTINGS'
-                    )
+                    file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
                 ]) {
                     sh '''
-                        ./mvnw -B -ntp deploy \
+                        ./mvnw deploy \
                         -DskipTests \
                         -s "$MAVEN_SETTINGS"
                     '''
@@ -115,39 +103,31 @@ pipeline {
 
         stage('7. Deploy Release to Nexus') {
             when {
-                expression {
-                    return params.DEPLOY_RELEASE
-                }
+                expression { return params.DEPLOY_RELEASE }
             }
-
             steps {
                 script {
                     def releaseVersion = params.RELEASE_VERSION?.trim()
 
-                    // Vérifier que la version respecte le format x.y.z
                     if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
-                        error('RELEASE_VERSION doit être au format x.y.z, exemple : 1.0.1')
+                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
                     }
 
-                    // Vérifier que la version Release est différente de SNAPSHOT
                     if (releaseVersion == env.SNAPSHOT_VERSION) {
-                        error('La version Release doit être différente de SNAPSHOT.')
+                        error('La version Release doit être différente de la version SNAPSHOT.')
                     }
 
                     try {
                         echo "Déploiement de la version Release : ${releaseVersion}"
 
-                        // Modifier temporairement la version du projet
                         sh """
-                            ./mvnw -B -ntp versions:set -DnewVersion=${releaseVersion} -DgenerateBackupPoms=false
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${releaseVersion} \
+                            -DgenerateBackupPoms=false
                         """
 
-                        // Déployer la version Release dans Nexus
                         withCredentials([
-                            file(
-                                credentialsId: 'maven-settings',
-                                variable: 'MAVEN_SETTINGS'
-                            )
+                            file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
                         ]) {
                             sh '''
                                 ./mvnw -B -ntp deploy \
@@ -157,31 +137,19 @@ pipeline {
                         }
 
                         echo 'Déploiement Release terminé avec succès.'
-
                     } finally {
-                        // Restaurer la version SNAPSHOT même en cas d'échec
-                        echo "Restauration de la version : ${env.SNAPSHOT_VERSION}"
+                        echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
 
                         sh """
-                            ./mvnw -B -ntp versions:set -DnewVersion=${env.SNAPSHOT_VERSION} -DgenerateBackupPoms=false
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${env.SNAPSHOT_VERSION} \
+                            -DgenerateBackupPoms=false
                         """
                     }
                 }
             }
         }
-    }
 
-    post {
-        success {
-            echo 'Pipeline Jenkins terminé avec succès.'
-        }
+    }   // ← ferme stages ✅
 
-        failure {
-            echo 'Le pipeline Jenkins a échoué. Consultez la Console Output.'
-        }
-
-        always {
-            echo 'Fin de l execution du pipeline.'
-        }
-    }
-}
+}       // ← ferme pipeline ✅

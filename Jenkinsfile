@@ -2,19 +2,19 @@
 pipeline {
     agent any
 
-    parameters {
-        booleanParam(
-            name: 'DEPLOY_RELEASE',
-            defaultValue: false,
-            description: 'Publier aussi une version Release dans Nexus'
-        )
+  parameters {
+    booleanParam(
+        name: 'DEPLOY_RELEASE',
+        defaultValue: false,
+        description: 'Déployer une version Release'
+    )
 
-        string(
-            name: 'RELEASE_VERSION',
-            defaultValue: '1.0.1',
-            description: 'Nouvelle version unique (format x.y.z)'
-        )
-    }
+    string(
+        name: 'RELEASE_VERSION',
+        defaultValue: '1.0.1',
+        description: 'Version Release au format x.y.z'
+    )
+}
 
     environment {
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
@@ -115,7 +115,8 @@ pipeline {
             }
         }
 
-       stage('7. Deploy Release to Nexus') {
+      
+stage('7. Deploy Release to Nexus') {
     when {
         expression {
             return params.DEPLOY_RELEASE
@@ -126,23 +127,30 @@ pipeline {
         script {
             def releaseVersion = params.RELEASE_VERSION?.trim()
 
+            // Vérifier le format x.y.z
             if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
                 error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
             }
 
+            // Vérifier que la version Release est différente de SNAPSHOT
             if (releaseVersion == env.SNAPSHOT_VERSION) {
                 error('La version Release doit être différente de la version SNAPSHOT.')
             }
 
             try {
+                echo "Déploiement de la version Release : ${releaseVersion}"
+
                 sh """
-                    ./mvnw versions:set \
+                    ./mvnw -B -ntp versions:set \
                     -DnewVersion=${releaseVersion} \
                     -DgenerateBackupPoms=false
                 """
 
                 withCredentials([
-                    file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
+                    file(
+                        credentialsId: 'maven-settings',
+                        variable: 'MAVEN_SETTINGS'
+                    )
                 ]) {
                     sh '''
                         ./mvnw -B -ntp deploy \
@@ -151,10 +159,14 @@ pipeline {
                     '''
                 }
 
+                echo 'Déploiement Release terminé avec succès.'
+
             } finally {
+                echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
+
                 sh """
-                    ./mvnw versions:set \
-                    -DnewVersion=${SNAPSHOT_VERSION} \
+                    ./mvnw -B -ntp versions:set \
+                    -DnewVersion=${env.SNAPSHOT_VERSION} \
                     -DgenerateBackupPoms=false
                 """
             }

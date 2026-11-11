@@ -151,7 +151,7 @@ pipeline {
                     sh '''
                         # 1. On change la version pour enlever le -SNAPSHOT
                         mvn versions:set \
-                            -DnewVersion=1.0.0 \
+                            -DnewVersion=1.0.1 \
                             -DgenerateBackupPoms=false
 
                         # 2. On déploie vers le dépôt RELEASES

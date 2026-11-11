@@ -115,68 +115,49 @@ pipeline {
             }
         }
 
-        stage('7. Deploy Release to Nexus') {
-            when {
-                expression {
-                    return params.DEPLOY_RELEASE
-                }
-            }
-
-            steps {
-                script {
-                    if (!(params.RELEASE_VERSION ==~ /\\d+\\.\\d+\\.\\d+/)) {
-                        error(
-                            'RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1'
-                        )
-                    }
-
-                    if (params.RELEASE_VERSION == env.SNAPSHOT_VERSION) {
-                        error('La version Release doit être différente de la version SNAPSHOT.')
-                    }
-
-                    try {
-                        sh """
-                            ./mvnw versions:set \
-                            -DnewVersion=${params.RELEASE_VERSION} \
-                            -DgenerateBackupPoms=false
-                        """
-
-                        withCredentials([
-                            file(
-                                credentialsId: 'maven-settings',
-                                variable: 'MAVEN_SETTINGS'
-                            )
-                        ]) {
-                            sh '''
-                                ./mvnw deploy \
-                                -DskipTests \
-                                -s "$MAVEN_SETTINGS"
-                            '''
-                        }
-
-                    } finally {
-                        sh """
-                            ./mvnw versions:set \
-                            -DnewVersion=${SNAPSHOT_VERSION} \
-                            -DgenerateBackupPoms=false
-                        """
-                    }
-                }
-            }
+       stage('7. Deploy Release to Nexus') {
+    when {
+        expression {
+            return params.DEPLOY_RELEASE
         }
     }
 
-    post {
-        success {
-            echo 'Pipeline terminé avec succès.'
-        }
+    steps {
+        script {
+            def releaseVersion = params.RELEASE_VERSION?.trim()
 
-        failure {
-            echo 'Pipeline en échec. Consulte la Console Output.'
-        }
+            if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
+                error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
+            }
 
-        always {
-            echo 'Fin de l’exécution du pipeline Jenkins.'
+            if (releaseVersion == env.SNAPSHOT_VERSION) {
+                error('La version Release doit être différente de la version SNAPSHOT.')
+            }
+
+            try {
+                sh """
+                    ./mvnw versions:set \
+                    -DnewVersion=${releaseVersion} \
+                    -DgenerateBackupPoms=false
+                """
+
+                withCredentials([
+                    file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
+                ]) {
+                    sh '''
+                        ./mvnw -B -ntp deploy \
+                        -DskipTests \
+                        -s "$MAVEN_SETTINGS"
+                    '''
+                }
+
+            } finally {
+                sh """
+                    ./mvnw versions:set \
+                    -DnewVersion=${SNAPSHOT_VERSION} \
+                    -DgenerateBackupPoms=false
+                """
+            }
         }
     }
 }

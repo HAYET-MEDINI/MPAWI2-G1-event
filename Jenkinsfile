@@ -1,5 +1,5 @@
 
-
+        
 pipeline {
     agent any
 
@@ -116,68 +116,67 @@ pipeline {
             }
         }
 
-
-        stage('7. Deploy Release to Nexus') {
-            when {
-                expression {
-                    return params.DEPLOY_RELEASE
-                }
-            }
-
-            steps {
-                script {
-                    def releaseVersion = params.RELEASE_VERSION?.trim()
-
-                    // Vérifier le format x.y.z
-                    if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
-                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
-                    }
-
-                    // Vérifier que la version Release est différente de SNAPSHOT
-                    if (releaseVersion == env.SNAPSHOT_VERSION) {
-                        error('La version Release doit être différente de la version SNAPSHOT.')
-                    }
-
-                    try {
-                        echo "Déploiement de la version Release : ${releaseVersion}"
-
-                        sh """
-                            ./mvnw -B -ntp versions:set \
-                            -DnewVersion=${releaseVersion} \
-                            -DgenerateBackupPoms=false
-                        """
-
-                        withCredentials([
-                            file(
-                                credentialsId: 'maven-settings',
-                                variable: 'MAVEN_SETTINGS'
-                            )
-                        ]) {
-                            sh '''
-                                ./mvnw -B -ntp deploy \
-                                -DskipTests \
-                                -s "$MAVEN_SETTINGS"
-                            '''
-                        }
-
-                        echo 'Déploiement Release terminé avec succès.'
-
-                    } finally {
-                        echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
-
-                        sh """
-                            ./mvnw -B -ntp versions:set \
-                            -DnewVersion=${env.SNAPSHOT_VERSION} \
-                            -DgenerateBackupPoms=false
-                        """
-                    }
-                }
-            }
+      
+stage('7. Deploy Release to Nexus') {
+    when {
+        expression {
+            return params.DEPLOY_RELEASE
         }
     }
 
-   
+    steps {
+        script {
+            def releaseVersion = params.RELEASE_VERSION?.trim()
+
+            // Vérifier le format x.y.z
+            if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
+                error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
+            }
+
+            // Vérifier que la version Release est différente de SNAPSHOT
+            if (releaseVersion == env.SNAPSHOT_VERSION) {
+                error('La version Release doit être différente de la version SNAPSHOT.')
+            }
+
+            try {
+                echo "Déploiement de la version Release : ${releaseVersion}"
+
+                sh """
+                    ./mvnw -B -ntp versions:set \
+                    -DnewVersion=${releaseVersion} \
+                    -DgenerateBackupPoms=false
+                """
+
+                withCredentials([
+                    file(
+                        credentialsId: 'maven-settings',
+                        variable: 'MAVEN_SETTINGS'
+                    )
+                ]) {
+                    sh '''
+                        ./mvnw -B -ntp deploy \
+                        -DskipTests \
+                        -s "$MAVEN_SETTINGS"
+                    '''
+                }
+
+                echo 'Déploiement Release terminé avec succès.'
+
+            } finally {
+                echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
+
+                sh """
+                    ./mvnw -B -ntp versions:set \
+                    -DnewVersion=${env.SNAPSHOT_VERSION} \
+                    -DgenerateBackupPoms=false
+                """
+            }
+        }
+    }
 }
+         } // Fin de stages
+
+} // Fin de pipeline
 
 
 

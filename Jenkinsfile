@@ -15,15 +15,11 @@ pipeline {
     }
 
     environment {
-        JDK_HOME = 'C:\\Program Files\\Java\\jdk-21.0.12.1'
-        MAVEN_HOME = 'C:\\apache-maven-3.10.0'
-
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         GIT_BRANCH = 'mayssa'
 
         SONAR_URL = 'http://localhost:9000'
         SONAR_PROJECT_KEY = 'eventsProject'
-        MAVEN_SETTINGS = 'C:\\Users\\myassoun\\.m2\\settings.xml'
     }
 
     stages {
@@ -35,23 +31,13 @@ pipeline {
 
         stage('2. Maven Clean & Compile') {
             steps {
-                bat '''
-                    @echo off
-                    set "JAVA_HOME=%JDK_HOME%"
-                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn clean compile
-                '''
+                sh 'sh ./mvnw clean compile'
             }
         }
 
         stage('3. Unit Tests & JaCoCo') {
             steps {
-                bat '''
-                    @echo off
-                    set "JAVA_HOME=%JDK_HOME%"
-                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn test
-                '''
+                sh 'sh ./mvnw verify'
             }
             post {
                 always {
@@ -64,24 +50,14 @@ pipeline {
         stage('4. SonarQube Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    bat '''
-                        @echo off
-                        set "JAVA_HOME=%JDK_HOME%"
-                        set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                        call mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=%SONAR_PROJECT_KEY% -Dsonar.host.url=%SONAR_URL% -Dsonar.token=%SONAR_TOKEN%
-                    '''
+                    sh 'sh ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey="$SONAR_PROJECT_KEY" -Dsonar.host.url="$SONAR_URL" -Dsonar.token="$SONAR_TOKEN"'
                 }
             }
         }
 
         stage('5. Package JAR') {
             steps {
-                bat '''
-                    @echo off
-                    set "JAVA_HOME=%JDK_HOME%"
-                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn package -DskipTests
-                '''
+                sh 'sh ./mvnw package -DskipTests'
             }
             post {
                 success {
@@ -92,12 +68,9 @@ pipeline {
 
         stage('6. Deploy Snapshot to Nexus') {
             steps {
-                bat '''
-                    @echo off
-                    set "JAVA_HOME=%JDK_HOME%"
-                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
-                '''
+                withCredentials([file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
+                    sh 'sh ./mvnw deploy -DskipTests -s "$MAVEN_SETTINGS"'
+                }
             }
         }
 
@@ -111,21 +84,12 @@ pipeline {
                         error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
                     }
                     try {
-                        bat '''
-                            @echo off
-                            set "JAVA_HOME=%JDK_HOME%"
-                            set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                            call mvn versions:set -DnewVersion=%RELEASE_VERSION% -DgenerateBackupPoms=false
-                            if errorlevel 1 exit /b %ERRORLEVEL%
-                            call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
-                        '''
+                        sh "sh ./mvnw versions:set -DnewVersion=${params.RELEASE_VERSION} -DgenerateBackupPoms=false"
+                        withCredentials([file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')]) {
+                            sh 'sh ./mvnw deploy -DskipTests -s "$MAVEN_SETTINGS"'
+                        }
                     } finally {
-                        bat '''
-                            @echo off
-                            set "JAVA_HOME=%JDK_HOME%"
-                            set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                            call mvn versions:set -DnewVersion=1.0.0-SNAPSHOT -DgenerateBackupPoms=false
-                        '''
+                        sh 'sh ./mvnw versions:set -DnewVersion=1.0.0-SNAPSHOT -DgenerateBackupPoms=false'
                     }
                 }
             }

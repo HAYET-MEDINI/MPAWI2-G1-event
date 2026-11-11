@@ -165,15 +165,19 @@ stage('7. Deploy Release to Nexus') {
             } finally {
                 echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
 
-                sh """
+                               sh """
                     ./mvnw -B -ntp versions:set \
                     -DnewVersion=${env.SNAPSHOT_VERSION} \
                     -DgenerateBackupPoms=false
                 """
-            }
-        }
-    }
-}
+            } // Fin du finally
+        } // Fin du script
+    } // Fin du steps
+} // Fin du stage 7
+
+    } // Fin du stages
+
+} // Fin du pipeline
 
 
        

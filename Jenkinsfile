@@ -116,68 +116,79 @@ pipeline {
             }
         }
 
-      
-stage('7. Deploy Release to Nexus') {
-    when {
-        expression {
-            return params.DEPLOY_RELEASE
+
+        stage('7. Deploy Release to Nexus') {
+            when {
+                expression {
+                    return params.DEPLOY_RELEASE
+                }
+            }
+
+            steps {
+                script {
+                    def releaseVersion = params.RELEASE_VERSION?.trim()
+
+                    // Vérifier le format x.y.z
+                    if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
+                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
+                    }
+
+                    // Vérifier que la version Release est différente de SNAPSHOT
+                    if (releaseVersion == env.SNAPSHOT_VERSION) {
+                        error('La version Release doit être différente de la version SNAPSHOT.')
+                    }
+
+                    try {
+                        echo "Déploiement de la version Release : ${releaseVersion}"
+
+                        sh """
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${releaseVersion} \
+                            -DgenerateBackupPoms=false
+                        """
+
+                        withCredentials([
+                            file(
+                                credentialsId: 'maven-settings',
+                                variable: 'MAVEN_SETTINGS'
+                            )
+                        ]) {
+                            sh '''
+                                ./mvnw -B -ntp deploy \
+                                -DskipTests \
+                                -s "$MAVEN_SETTINGS"
+                            '''
+                        }
+
+                        echo 'Déploiement Release terminé avec succès.'
+
+                    } finally {
+                        echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
+
+                        sh """
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${env.SNAPSHOT_VERSION} \
+                            -DgenerateBackupPoms=false
+                        """
+                    }
+                }
+            }
         }
     }
 
-    steps {
-        script {
-            def releaseVersion = params.RELEASE_VERSION?.trim()
+    post {
+        success {
+            echo 'Pipeline Jenkins terminé avec succès.'
+        }
+        failure {
+            echo 'Le pipeline Jenkins a échoué. Consultez la Console Output.'
+        }
+        always {
+            echo 'Fin de l execution du pipeline.'
+        }
+    }
+}
 
-            // Vérifier le format x.y.z
-            if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
-                error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
-            }
-
-            // Vérifier que la version Release est différente de SNAPSHOT
-            if (releaseVersion == env.SNAPSHOT_VERSION) {
-                error('La version Release doit être différente de la version SNAPSHOT.')
-            }
-
-            try {
-                echo "Déploiement de la version Release : ${releaseVersion}"
-
-                sh """
-                    ./mvnw -B -ntp versions:set \
-                    -DnewVersion=${releaseVersion} \
-                    -DgenerateBackupPoms=false
-                """
-
-                withCredentials([
-                    file(
-                        credentialsId: 'maven-settings',
-                        variable: 'MAVEN_SETTINGS'
-                    )
-                ]) {
-                    sh '''
-                        ./mvnw -B -ntp deploy \
-                        -DskipTests \
-                        -s "$MAVEN_SETTINGS"
-                    '''
-                }
-
-                echo 'Déploiement Release terminé avec succès.'
-
-            } finally {
-                echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
-
-                               sh """
-                    ./mvnw -B -ntp versions:set \
-                    -DnewVersion=${env.SNAPSHOT_VERSION} \
-                    -DgenerateBackupPoms=false
-                """
-            } // Fin du finally
-        } // Fin du script
-    } // Fin du steps
-} // Fin du stage 7
-
-    } // Fin du stages
-
-} // Fin du pipeline
 
 
        

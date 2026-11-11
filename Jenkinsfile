@@ -137,7 +137,7 @@ pipeline {
                 }
             }
         }
-    }
+    
         stage('7. Deploy Release to Nexus') {
             steps {
                 echo '=== Deploy RELEASE to Nexus ==='
@@ -160,9 +160,10 @@ pipeline {
                             -s "$MAVEN_SETTINGS" \
                             -DaltDeploymentRepository=deploymentRepo::default::${NEXUS_URL}/repository/maven-releases/
                     '''
-                }
+                }  
             }
         }
+    }
     post {
 
         success {

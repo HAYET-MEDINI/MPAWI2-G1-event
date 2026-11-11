@@ -5,7 +5,12 @@ pipeline {
         booleanParam(
             name: 'DEPLOY_RELEASE',
             defaultValue: false,
-            description: 'Publier aussi la version Release 1.0.0 dans Nexus'
+            description: 'Publier aussi une version Release dans Nexus'
+        )
+        string(
+            name: 'RELEASE_VERSION',
+            defaultValue: '1.0.1',
+            description: 'Nouvelle version unique (format x.y.z), par exemple 1.0.1'
         )
     }
 
@@ -102,12 +107,15 @@ pipeline {
             }
             steps {
                 script {
+                    if (!(params.RELEASE_VERSION ==~ /\d+\.\d+\.\d+/)) {
+                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
+                    }
                     try {
                         bat '''
                             @echo off
                             set "JAVA_HOME=%JDK_HOME%"
                             set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                            call mvn versions:set -DnewVersion=1.0.0 -DgenerateBackupPoms=false
+                            call mvn versions:set -DnewVersion=%RELEASE_VERSION% -DgenerateBackupPoms=false
                             if errorlevel 1 exit /b %ERRORLEVEL%
                             call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
                         '''

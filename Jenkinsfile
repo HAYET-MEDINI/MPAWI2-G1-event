@@ -63,7 +63,7 @@ pipeline {
                         @echo off
                         set "JAVA_HOME=%JDK_HOME%"
                         set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                        call mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=%SONAR_PROJECT_KEY% -Dsonar.host.url=%SONAR_URL%
+                        call mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar -Dsonar.projectKey=%SONAR_PROJECT_KEY% -Dsonar.host.url=%SONAR_URL% -Dsonar.token=%SONAR_TOKEN%
                     '''
                 }
             }

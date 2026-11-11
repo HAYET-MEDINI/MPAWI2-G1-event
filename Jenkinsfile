@@ -348,3 +348,6 @@ stage('7. Deploy Release to Nexus') {
         }
     }
 }
+         } // Fin de stages
+
+} // Fin de pipeline

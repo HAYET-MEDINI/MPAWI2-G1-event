@@ -1,26 +1,32 @@
+
+
 pipeline {
     agent any
 
-    parameters {
-        booleanParam(
-            name: 'DEPLOY_RELEASE',
-            defaultValue: false,
-            description: 'Déployer une version Release'
-        )
+  parameters {
+    booleanParam(
+        name: 'DEPLOY_RELEASE',
+        defaultValue: false,
+        description: 'Déployer une version Release'
+    )
 
-        string(
-            name: 'RELEASE_VERSION',
-            defaultValue: '1.0.1',
-            description: 'Version Release au format x.y.z'
-        )
-    }
+    string(
+        name: 'RELEASE_VERSION',
+        defaultValue: '1.0.1',
+        description: 'Version Release au format x.y.z'
+    )
+}
 
     environment {
-        GIT_REPO_URL      = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
-        GIT_BRANCH        = 'mayssa'
-        SONAR_URL         = 'http://sonarqube:9000'
+        GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
+        GIT_BRANCH = 'mayssa'
+
+        // Adresse Docker de SonarQube
+        SONAR_URL = 'http://sonarqube:9000'
         SONAR_PROJECT_KEY = 'eventsProject'
-        SNAPSHOT_VERSION  = '1.0.0-SNAPSHOT'
+
+        // Version SNAPSHOT actuelle du projet
+        SNAPSHOT_VERSION = '1.0.0-SNAPSHOT'
     }
 
     stages {
@@ -43,12 +49,14 @@ pipeline {
             steps {
                 sh './mvnw verify'
             }
+
             post {
                 always {
                     junit(
                         allowEmptyResults: true,
                         testResults: '**/target/surefire-reports/*.xml'
                     )
+
                     archiveArtifacts(
                         allowEmptyArchive: true,
                         artifacts: '**/target/site/jacoco/**'
@@ -60,7 +68,10 @@ pipeline {
         stage('4. SonarQube Analysis') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
                 ]) {
                     sh '''
                         ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
@@ -76,6 +87,7 @@ pipeline {
             steps {
                 sh './mvnw package -DskipTests'
             }
+
             post {
                 success {
                     archiveArtifacts(
@@ -90,7 +102,10 @@ pipeline {
         stage('6. Deploy Snapshot to Nexus') {
             steps {
                 withCredentials([
-                    file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
+                    file(
+                        credentialsId: 'maven-settings',
+                        variable: 'MAVEN_SETTINGS'
+                    )
                 ]) {
                     sh '''
                         ./mvnw deploy \
@@ -101,55 +116,69 @@ pipeline {
             }
         }
 
-        stage('7. Deploy Release to Nexus') {
-            when {
-                expression { return params.DEPLOY_RELEASE }
+      
+stage('7. Deploy Release to Nexus') {
+    when {
+        expression {
+            return params.DEPLOY_RELEASE
+        }
+    }
+
+    steps {
+        script {
+            def releaseVersion = params.RELEASE_VERSION?.trim()
+
+            // Vérifier le format x.y.z
+            if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
+                error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
             }
-            steps {
-                script {
-                    def releaseVersion = params.RELEASE_VERSION?.trim()
 
-                    if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
-                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
-                    }
+            // Vérifier que la version Release est différente de SNAPSHOT
+            if (releaseVersion == env.SNAPSHOT_VERSION) {
+                error('La version Release doit être différente de la version SNAPSHOT.')
+            }
 
-                    if (releaseVersion == env.SNAPSHOT_VERSION) {
-                        error('La version Release doit être différente de la version SNAPSHOT.')
-                    }
+            try {
+                echo "Déploiement de la version Release : ${releaseVersion}"
 
-                    try {
-                        echo "Déploiement de la version Release : ${releaseVersion}"
+                sh """
+                    ./mvnw -B -ntp versions:set \
+                    -DnewVersion=${releaseVersion} \
+                    -DgenerateBackupPoms=false
+                """
 
-                        sh """
-                            ./mvnw -B -ntp versions:set \
-                            -DnewVersion=${releaseVersion} \
-                            -DgenerateBackupPoms=false
-                        """
-
-                        withCredentials([
-                            file(credentialsId: 'maven-settings', variable: 'MAVEN_SETTINGS')
-                        ]) {
-                            sh '''
-                                ./mvnw -B -ntp deploy \
-                                -DskipTests \
-                                -s "$MAVEN_SETTINGS"
-                            '''
-                        }
-
-                        echo 'Déploiement Release terminé avec succès.'
-                    } finally {
-                        echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
-
-                        sh """
-                            ./mvnw -B -ntp versions:set \
-                            -DnewVersion=${env.SNAPSHOT_VERSION} \
-                            -DgenerateBackupPoms=false
-                        """
-                    }
+                withCredentials([
+                    file(
+                        credentialsId: 'maven-settings',
+                        variable: 'MAVEN_SETTINGS'
+                    )
+                ]) {
+                    sh '''
+                        ./mvnw -B -ntp deploy \
+                        -DskipTests \
+                        -s "$MAVEN_SETTINGS"
+                    '''
                 }
+
+                echo 'Déploiement Release terminé avec succès.'
+
+            } finally {
+                echo "Restauration de la version SNAPSHOT : ${env.SNAPSHOT_VERSION}"
+
+                sh """
+                    ./mvnw -B -ntp versions:set \
+                    -DnewVersion=${env.SNAPSHOT_VERSION} \
+                    -DgenerateBackupPoms=false
+                """
             }
         }
+    }
+}
 
-    }   // ← ferme stages ✅
 
-}       // ← ferme pipeline ✅
+       
+           
+            
+         
+  
+    

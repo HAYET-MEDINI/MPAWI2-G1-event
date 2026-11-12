@@ -27,14 +27,22 @@
     </scm>
 
     <!-- Properties -->
-    <properties>
-        <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <sonar.projectKey>eventsProject</sonar.projectKey>
-        <sonar.java.source>21</sonar.java.source>
-    </properties>
+  
+<properties>
+    <java.version>21</java.version>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <sonar.projectKey>eventsProject</sonar.projectKey>
+    <sonar.java.source>21</sonar.java.source>
+
+    <!-- Chemin du rapport de couverture JaCoCo -->
+    <sonar.coverage.jacoco.xmlReportPaths>
+        ${project.build.directory}/site/jacoco/jacoco.xml
+    </sonar.coverage.jacoco.xmlReportPaths>
+</properties>
+
 
     <!-- Nexus Configuration -->
     <distributionManagement>

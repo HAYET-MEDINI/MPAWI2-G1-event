@@ -98,7 +98,7 @@ pipeline {
                     passwordVariable: 'DOCKERHUB_TOKEN'
                 )]) {
                     script {
-                        docker.build("${DOCKERHUB_USER}/eventsproject:${BUILD_NUMBER}")
+                        docker.build("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}")
                     }
                 }
             }
@@ -113,7 +113,7 @@ pipeline {
                 )]) {
                     script {
                         docker.withRegistry('', 'dockerhub-credentials') {
-                            docker.image("${DOCKERHUB_USER}/eventsproject:${BUILD_NUMBER}").push()
+                            docker.image("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}").push()
                         }
                     }
                 }

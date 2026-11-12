@@ -14,10 +14,16 @@
     <name>eventsProject</name>
     <description>eventsProject</description>
     <scm>
-        <connection>scm:svn:http://somerepository.com/svn_repo/trunk</connection>
-        <developerConnection>scm:svn:https://somerepository.com/svn_repo/trunk</developerConnection>
-        <url>http://somerepository.com/view.cgi</url>
+        <connection>scm:git:https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git</connection>
+        <developerConnection>scm:git:https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git</developerConnection>
+        <url>https://github.com/HAYET-MEDINI/MPAWI2-G1-event</url>
     </scm>
+    <distributionManagement>
+        <repository>
+            <id>nexus-releases</id>
+            <url>http://localhost:8081/repository/maven-releases/</url>
+        </repository>
+    </distributionManagement>
     <properties>
         <java.version>1.8</java.version>
     </properties>

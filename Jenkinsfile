@@ -195,28 +195,31 @@ stage('8. Build Docker Image') {
         '''
     }
 }
+
 stage('9. Push Docker Image') {
     steps {
         withCredentials([
-            usernamePassword(
+            string(
                 credentialsId: "${DOCKER_CREDENTIALS}",
-                usernameVariable: 'DOCKER_USERNAME',
-                passwordVariable: 'DOCKER_PASSWORD'
+                variable: 'DOCKER_PASSWORD'
             )
         ]) {
-            sh '''
-                echo "$DOCKER_PASSWORD" | docker login \
-                    -u "$DOCKER_USERNAME" \
-                    --password-stdin
+            withEnv(["DOCKER_USERNAME=mayssahamdanii"]) {
+                sh '''
+                    echo "$DOCKER_PASSWORD" | docker login \
+                        -u "$DOCKER_USERNAME" \
+                        --password-stdin
 
-                docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
-                docker push ${DOCKER_IMAGE}:latest
+                    docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                    docker push ${DOCKER_IMAGE}:latest
 
-                docker logout
-            '''
+                    docker logout
+                '''
+            }
         }
     }
 }
+
   
        } // Fin de stages
 

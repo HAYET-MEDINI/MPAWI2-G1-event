@@ -27,6 +27,8 @@ pipeline {
 
         // Version SNAPSHOT actuelle du projet
         SNAPSHOT_VERSION = '1.0.0-SNAPSHOT'
+DOCKER_IMAGE = 'mayssahamdanii/docker-spring-boot'
+DOCKER_CREDENTIALS = 'dockerhub'
     }
 
     stages {
@@ -184,7 +186,39 @@ stage('7. Deploy Release to Nexus') {
         }
     }
 }
-         } // Fin de stages
+stage('8. Build Docker Image') {
+    steps {
+        sh '''
+            echo "Building Docker image..."
+            docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .
+            docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
+        '''
+    }
+}
+stage('9. Push Docker Image') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: "${DOCKER_CREDENTIALS}",
+                usernameVariable: 'DOCKER_USERNAME',
+                passwordVariable: 'DOCKER_PASSWORD'
+            )
+        ]) {
+            sh '''
+                echo "$DOCKER_PASSWORD" | docker login \
+                    -u "$DOCKER_USERNAME" \
+                    --password-stdin
+
+                docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                docker push ${DOCKER_IMAGE}:latest
+
+                docker logout
+            '''
+        }
+    }
+}
+  
+       } // Fin de stages
 
 } // Fin de pipeline
 

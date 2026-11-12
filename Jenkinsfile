@@ -65,23 +65,33 @@ pipeline {
             }
         }
 
-        stage('4. SonarQube Analysis') {
-            steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                        -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-                        -Dsonar.host.url="$SONAR_URL" \
-                        -Dsonar.token="$SONAR_TOKEN"
-                    '''
-                }
-            }
+     
+stage('4. SonarQube Analysis') {
+    steps {
+        // Vérifier que le rapport JaCoCo existe
+        sh '''
+            echo "Verification du rapport JaCoCo..."
+            ls -lh target/site/jacoco/
+            test -f target/site/jacoco/jacoco.xml
+        '''
+
+        withCredentials([
+            string(
+                credentialsId: 'sonar-token',
+                variable: 'SONAR_TOKEN'
+            )
+        ]) {
+            sh '''
+                ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+                -Dsonar.host.url="$SONAR_URL" \
+                -Dsonar.token="$SONAR_TOKEN" \
+                -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+            '''
         }
+    }
+}
+
 
         stage('5. Package JAR') {
             steps {

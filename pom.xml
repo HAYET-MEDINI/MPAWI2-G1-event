@@ -9,14 +9,14 @@
     </parent>
     <groupId>tn.esprit</groupId>
     <artifactId>eventsProject</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1-SNAPSHOT</version>
     <name>eventsProject</name>
     <description>eventsProject</description>
     <scm>
         <connection>scm:git:https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git</connection>
         <developerConnection>scm:git:https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git</developerConnection>
         <url>https://github.com/HAYET-MEDINI/MPAWI2-G1-event</url>
-      <tag>v1.0.0</tag>
+      <tag>HEAD</tag>
   </scm>
     <distributionManagement>
         <repository>

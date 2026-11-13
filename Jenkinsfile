@@ -137,8 +137,7 @@ pipeline {
                 }
             }
         }
-    
-               stage('7. Deploy Release to Nexus') {
+            stage('7. Deploy Release to Nexus') {
             steps {
                 echo '=== Deploy RELEASE to Nexus ==='
 
@@ -149,12 +148,11 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        # 1. On change la version pour enlever le -SNAPSHOT
+                        # Utilisation du numéro de build de Jenkins pour une version unique
                         mvn versions:set \
-                            -DnewVersion=1.0.1 \
+                            -DnewVersion=1.0.${BUILD_NUMBER} \
                             -DgenerateBackupPoms=false
 
-                        # 2. On déploie vers le dépôt RELEASES
                         mvn deploy \
                             -DskipTests \
                             -s "$MAVEN_SETTINGS" \

@@ -163,17 +163,17 @@ pipeline {
                 }
             }
         }
-        stage('8. Build & Push Docker Image') {
-    steps {
-        script {
-            dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
-            docker.withRegistry('', registryCredential) {
-                dockerImage.push("${BUILD_NUMBER}")
-                dockerImage.push("latest")
+                stage('8. Build & Push Docker Image') {
+            steps {
+                script {
+                    def dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
+                    docker.withRegistry('', registryCredential) {
+                        dockerImage.push("${BUILD_NUMBER}")
+                        dockerImage.push("latest")
+                    }
+                }
             }
         }
-    }
-}
     }
     post {
 

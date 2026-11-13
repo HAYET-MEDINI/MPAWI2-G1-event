@@ -13,6 +13,8 @@ pipeline {
         // Services accessibles depuis le conteneur Jenkins
         SONAR_URL = 'http://host.docker.internal:9000'
         NEXUS_URL = 'http://host.docker.internal:8081'
+        registry = "alouiabir/eventsproject" 
+        registryCredential = 'dockerhub' 
     }
 
     stages {
@@ -161,6 +163,17 @@ pipeline {
                 }
             }
         }
+        stage('8. Build & Push Docker Image') {
+    steps {
+        script {
+            dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
+            docker.withRegistry('', registryCredential) {
+                dockerImage.push("${BUILD_NUMBER}")
+                dockerImage.push("latest")
+            }
+        }
+    }
+}
     }
     post {
 

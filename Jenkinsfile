@@ -25,6 +25,7 @@ pipeline {
         JAVA_HOME = 'C:/jdk-21.0.12_windows-x64_bin/jdk-21.0.12'
 
         MAVEN_HOME = 'C:/Users/Omega Informatique/Documents/apache-maven-3.9.16-bin/apache-maven-3.9.16'
+        DOCKER_HOME = 'C:/Users/Omega Informatique/AppData/Local/Programs/DockerDesktop/resources/bin'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         APP_GIT_BRANCH = 'Emna-cherni'
@@ -177,8 +178,16 @@ pipeline {
                 ]) {
                     bat '''
                         @echo off
+                        set "PATH=%DOCKER_HOME%;%PATH%"
 
                         docker --version
+                        if errorlevel 1 exit /b 1
+
+                        docker info >nul 2>&1
+                        if errorlevel 1 (
+                            echo Docker daemon is unavailable to the Jenkins agent.
+                            exit /b 1
+                        )
 
                         docker build ^
                             -t "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%" ^
@@ -213,6 +222,7 @@ pipeline {
                         try {
                             bat '''
                                 @echo off
+                                set "PATH=%DOCKER_HOME%;%PATH%"
 
                                 powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
 

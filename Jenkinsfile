@@ -13,6 +13,8 @@ pipeline {
         // Services accessibles depuis le conteneur Jenkins
         SONAR_URL = 'http://host.docker.internal:9000'
         NEXUS_URL = 'http://host.docker.internal:8081'
+        
+        // Configuration Docker Hub
         registry = "alouiabir/eventsproject" 
         registryCredential = 'dockerhub' 
     }
@@ -139,7 +141,8 @@ pipeline {
                 }
             }
         }
-            stage('7. Deploy Release to Nexus') {
+
+        stage('7. Deploy Release to Nexus') {
             steps {
                 echo '=== Deploy RELEASE to Nexus ==='
 
@@ -163,12 +166,10 @@ pipeline {
                 }
             }
         }
-<<<<<<< HEAD
-                stage('8. Build & Push Docker Image') {
-=======
-               stage('8. Build & Push Docker Image') {
->>>>>>> 88b56b4bed2e7a13c925d41c05f05048b2606ebd
+
+        stage('8. Build & Push Docker Image') {
             steps {
+                echo '=== Build & Push Docker Image ==='
                 script {
                     def dockerImage = docker.build("${registry}:${BUILD_NUMBER}")
                     docker.withRegistry('', registryCredential) {
@@ -179,8 +180,8 @@ pipeline {
             }
         }
     }
-    post {
 
+    post {
         success {
             echo '=========================================='
             echo 'PIPELINE SUCCESSFUL'
@@ -191,6 +192,8 @@ pipeline {
             echo 'SonarQube: OK'
             echo 'JAR Package: OK'
             echo 'Nexus Snapshot: OK'
+            echo 'Nexus Release: OK'
+            echo 'Docker Push: OK'
         }
 
         failure {

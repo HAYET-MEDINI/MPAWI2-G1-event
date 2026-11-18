@@ -1,0 +1,1 @@
+apiVersion: apps/v1kind: Deploymentmetadata:  name: event-appspec:  replicas: 1  selector:    matchLabels:      app: event-app  template:    metadata:      labels:        app: event-app    spec:      containers:      - name: event-app        image: nginx:latest        ports:        - containerPort: 80

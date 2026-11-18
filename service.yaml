@@ -1,0 +1,1 @@
+apiVersion: v1kind: Servicemetadata:  name: event-servicespec:  type: NodePort  selector:    app: event-app  ports:  - port: 80    targetPort: 80    nodePort: 30080

@@ -7,8 +7,11 @@ resource "aws_eks_cluster" "my_cluster" {
   name     = var.cluster_name
   role_arn = var.cluster_role_arn
 
-  vpc_config {
-    subnet_ids = var.subnet_ids
+    vpc_config {
+    subnet_ids              = var.subnet_ids
+    endpoint_public_access  = true
+    endpoint_private_access = false
+    public_access_cidrs     = ["197.14.226.211/32"]
   }
 }
 

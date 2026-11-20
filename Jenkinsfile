@@ -17,6 +17,8 @@ pipeline {
         // Configuration Docker Hub
         registry = "alouiabir/eventsproject" 
         registryCredential = 'dockerhub' 
+        // Configuration AWS
+        awsCredentialsId = 'aws-credentials'
     }
 
     stages {
@@ -180,7 +182,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo '=========================================='

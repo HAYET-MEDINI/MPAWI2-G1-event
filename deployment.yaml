@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventsproject-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: eventsproject
+  template:
+    metadata:
+      labels:
+        app: eventsproject
+    spec:
+      containers:
+      - name: eventsproject
+        image: alouiabir/eventsproject:latest
+        ports:
+        - containerPort: 8080

@@ -181,6 +181,55 @@ pipeline {
                 }
             }
         }
+       stage('9. Test AWS Credentials') {
+            steps {
+                withCredentials([file(credentialsId: "${awsCredentialsId}", variable: 'AWS_CREDENTIALS_FILE')]) {
+                    script {
+                        def awsCredentials = readFile(AWS_CREDENTIALS_FILE).trim().split("\n")
+                        env.AWS_ACCESS_KEY_ID = awsCredentials.find { it.startsWith("aws_access_key_id") }.split("=")[1].trim()
+                        env.AWS_SECRET_ACCESS_KEY = awsCredentials.find { it.startsWith("aws_secret_access_key") }.split("=")[1].trim()
+                        env.AWS_SESSION_TOKEN = awsCredentials.find { it.startsWith("aws_session_token") }?.split("=")[1]?.trim()
+                        echo "AWS Access Key ID: ${env.AWS_ACCESS_KEY_ID}"
+                        echo "AWS Credentials File Loaded"
+                    }
+                }
+            }
+        }
+
+        stage('10. SETUP TERRAFORM') {
+            steps {
+                // On utilise un dossier 'terraform' dans ton projet
+                dir('terraform') {
+                    echo "=== Initialisation de Terraform ==="
+                    sh 'terraform init'
+                    
+                    echo "=== Création de l'infrastructure (Cluster EKS) ==="
+                    sh 'terraform apply -auto-approve'
+                }
+            }
+        }
+
+        stage('11. UPDATE KUBECONFIG') {
+            steps {
+                withCredentials([file(credentialsId: "${awsCredentialsId}", variable: 'AWS_CREDENTIALS_FILE')]) {
+                    echo "=== Mise à jour du Kubeconfig pour EKS ==="
+                    sh 'aws eks update-kubeconfig --name mykubernetes --region us-east-1'
+                }
+            }
+        }
+
+        stage('12. DEPLOY TO AWS KUBERNETES') {
+            steps {
+                withCredentials([file(credentialsId: "${awsCredentialsId}", variable: 'AWS_CREDENTIALS_FILE')]) {
+                    echo "=== Vérification de l'identité AWS ==="
+                    sh 'aws sts get-caller-identity'
+                    
+                    echo "=== Déploiement sur Kubernetes ==="
+                    sh 'kubectl apply -f deployment.yaml'
+                    sh 'kubectl apply -f service.yaml'
+                }
+            }
+        }
     }
     post {
         success {

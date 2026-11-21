@@ -11,7 +11,7 @@ resource "aws_eks_cluster" "my_cluster" {
     subnet_ids              = var.subnet_ids
     endpoint_public_access  = true
     endpoint_private_access = true
-    public_access_cidrs     = ["197.14.226.211/32"]
+    public_access_cidrs = ["41.226.87.83/32"]
   }
 }
 

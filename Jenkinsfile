@@ -421,6 +421,37 @@ pipeline {
                 }
             }
         }
+                // ==========================================
+        // 12. TERRAFORM APPLY
+        // ==========================================
+
+        stage('12. Terraform Apply') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    bat '''
+                        @echo off
+
+                        echo === Terraform Apply ===
+
+                        docker run --rm ^
+                            -v "%WORKSPACE%:/workspace" ^
+                            -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                            -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                            -w /workspace/terraform ^
+                            hashicorp/terraform:latest apply -auto-approve
+
+                        if errorlevel 1 exit /b 1
+
+                        echo Terraform Apply completed successfully.
+                    '''
+                }
+            }
+        }
     }
 
     // ==========================================

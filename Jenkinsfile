@@ -351,6 +351,76 @@ pipeline {
                 }
             }
         }
+                // ==========================================
+        // 10. TEST AWS CREDENTIALS
+        // ==========================================
+
+        stage('10. Test AWS Credentials') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    bat '''
+                        @echo off
+
+                        docker run --rm ^
+                            -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                            -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                            amazon/aws-cli sts get-caller-identity
+
+                        if errorlevel 1 exit /b 1
+                    '''
+                }
+            }
+        }
+
+        // ==========================================
+        // 11. SETUP TERRAFORM
+        // ==========================================
+
+        stage('11. Setup Terraform') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        bat '''
+                            @echo off
+
+                            echo === Terraform Init ===
+
+                            docker run --rm ^
+                                -v "%WORKSPACE%:/workspace" ^
+                                -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                                -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                                -w /workspace/terraform ^
+                                hashicorp/terraform:latest init
+
+                            if errorlevel 1 exit /b 1
+
+                            echo === Terraform Validate ===
+
+                            docker run --rm ^
+                                -v "%WORKSPACE%:/workspace" ^
+                                -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                                -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                                -w /workspace/terraform ^
+                                hashicorp/terraform:latest validate
+
+                            if errorlevel 1 exit /b 1
+
+                            echo Terraform init and validate completed successfully.
+                        '''
+                    }
+                }
+            }
+        }
     }
 
     // ==========================================

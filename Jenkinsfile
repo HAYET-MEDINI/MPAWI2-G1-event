@@ -400,7 +400,7 @@ pipeline {
                                 -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
                                 -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
                                 -w /workspace/terraform ^
-                                hashicorp/terraform:latest init
+                                hashicorp/terraform:latest init -upgrade
 
                             if errorlevel 1 exit /b 1
 

@@ -1,1 +1,19 @@
-apiVersion: apps/v1kind: Deploymentmetadata:  name: event-appspec:  replicas: 1  selector:    matchLabels:      app: event-app  template:    metadata:      labels:        app: event-app    spec:      containers:      - name: event-app        image: nginx:latest        ports:        - containerPort: 80
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-app
+  template:
+    metadata:
+      labels:
+        app: event-app
+    spec:
+      containers:
+      - name: event-app
+        image: nginx:latest
+        ports:
+        - containerPort: 80

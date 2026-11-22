@@ -90,7 +90,17 @@ pipeline {
             }
         }
 
-        stage('6. Build Docker Image') {
+        stage('6. Terraform Setup') {
+            steps {
+                dir('terraform') {
+                    bat 'terraform init'
+                    bat 'terraform validate'
+                    bat 'terraform apply -auto-approve'
+                }
+            }
+        }
+
+        stage('7. Build Docker Image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
@@ -104,7 +114,7 @@ pipeline {
             }
         }
 
-        stage('7. Push Docker Image') {
+        stage('8. Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
@@ -120,7 +130,7 @@ pipeline {
             }
         }
 
-        stage('8. Deploy Snapshot to Nexus') {
+        stage('9. Deploy Snapshot to Nexus') {
             steps {
                 bat '''
                     @echo off
@@ -131,7 +141,7 @@ pipeline {
             }
         }
 
-        stage('9. Deploy Release to Nexus') {
+        stage('10. Deploy Release to Nexus') {
             when {
                 expression { params.DEPLOY_RELEASE }
             }

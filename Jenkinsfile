@@ -33,24 +33,40 @@ pipeline {
     }
 
     stages {
-        stage('1. Git Checkout') {
+        stage('CHECKOUT GIT') {
             steps {
                 git branch: "${GIT_BRANCH}", url: "${GIT_REPO_URL}"
             }
         }
 
-        stage('2. Maven Clean & Compile') {
+        stage('MVN CLEAN') {
             steps {
                 bat '''
                     @echo off
                     set "JAVA_HOME=%JDK_HOME%"
                     set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn clean compile
+                    call mvn clean
                 '''
             }
         }
 
-        stage('3. Unit Tests & JaCoCo') {
+        stage('ARTIFACT CONSTRUCTION') {
+            steps {
+                bat '''
+                    @echo off
+                    set "JAVA_HOME=%JDK_HOME%"
+                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                    call mvn package -DskipTests
+                '''
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: 'target/eventsProject-*.jar', excludes: 'target/*.jar.original', fingerprint: true
+                }
+            }
+        }
+
+        stage('UNIT TESTS') {
             steps {
                 bat '''
                     @echo off
@@ -67,7 +83,7 @@ pipeline {
             }
         }
 
-        stage('4. SonarQube Analysis') {
+        stage('MVN SONARQUBE') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     bat '''
@@ -80,23 +96,87 @@ pipeline {
             }
         }
 
-        stage('5. Package JAR') {
+        stage('PUBLISH TO NEXUS') {
             steps {
                 bat '''
                     @echo off
                     set "JAVA_HOME=%JDK_HOME%"
                     set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn package -DskipTests
+                    call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
                 '''
-            }
-            post {
-                success {
-                    archiveArtifacts artifacts: 'target/eventsProject-*.jar', excludes: 'target/*.jar.original', fingerprint: true
+                script {
+                    if (params.DEPLOY_RELEASE) {
+                        if (!(params.RELEASE_VERSION ==~ /\d+\.\d+\.\d+/)) {
+                            error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
+                        }
+                        try {
+                            bat '''
+                                @echo off
+                                set "JAVA_HOME=%JDK_HOME%"
+                                set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                                call mvn versions:set -DnewVersion=%RELEASE_VERSION% -DgenerateBackupPoms=false
+                                if errorlevel 1 exit /b %ERRORLEVEL%
+                                call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
+                            '''
+                        } finally {
+                            bat '''
+                                @echo off
+                                set "JAVA_HOME=%JDK_HOME%"
+                                set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                                call mvn versions:set -DnewVersion=1.0.0-SNAPSHOT -DgenerateBackupPoms=false
+                            '''
+                        }
+                    }
                 }
             }
         }
 
-        stage('6. Terraform Setup') {
+        stage('BUILDING OUR IMAGE') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_TOKEN'
+                )]) {
+                    script {
+                        docker.build("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}")
+                    }
+                }
+            }
+        }
+
+        stage('DEPLOY OUR IMAGE') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_TOKEN'
+                )]) {
+                    script {
+                        docker.withRegistry('', 'dockerhub-credentials') {
+                            docker.image("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}").push()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Test AWS Credentials') {
+            steps {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
+                        bat '''
+                            @echo off
+                            aws sts get-caller-identity --query Account --output text >NUL
+                            if errorlevel 1 exit /b %ERRORLEVEL%
+                            echo AWS credentials are valid.
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('SETUP TERRAFORM') {
             steps {
                 dir('terraform-source') {
                     git branch: 'master', url: 'https://gitlab.com/ThourayaLouati/docker-spring-boot.git'
@@ -114,77 +194,6 @@ pipeline {
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        stage('7. Build Docker Image') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKERHUB_USER',
-                    passwordVariable: 'DOCKERHUB_TOKEN'
-                )]) {
-                    script {
-                        docker.build("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}")
-                    }
-                }
-            }
-        }
-
-        stage('8. Push Docker Image') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKERHUB_USER',
-                    passwordVariable: 'DOCKERHUB_TOKEN'
-                )]) {
-                    script {
-                        docker.withRegistry('', 'dockerhub-credentials') {
-                            docker.image("${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}").push()
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('9. Deploy Snapshot to Nexus') {
-            steps {
-                bat '''
-                    @echo off
-                    set "JAVA_HOME=%JDK_HOME%"
-                    set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                    call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
-                '''
-            }
-        }
-
-        stage('10. Deploy Release to Nexus') {
-            when {
-                expression { params.DEPLOY_RELEASE }
-            }
-            steps {
-                script {
-                    if (!(params.RELEASE_VERSION ==~ /\d+\.\d+\.\d+/)) {
-                        error('RELEASE_VERSION doit être au format x.y.z, par exemple 1.0.1')
-                    }
-                    try {
-                        bat '''
-                            @echo off
-                            set "JAVA_HOME=%JDK_HOME%"
-                            set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                            call mvn versions:set -DnewVersion=%RELEASE_VERSION% -DgenerateBackupPoms=false
-                            if errorlevel 1 exit /b %ERRORLEVEL%
-                            call mvn deploy -DskipTests -s "%MAVEN_SETTINGS%"
-                        '''
-                    } finally {
-                        bat '''
-                            @echo off
-                            set "JAVA_HOME=%JDK_HOME%"
-                            set "PATH=%JDK_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-                            call mvn versions:set -DnewVersion=1.0.0-SNAPSHOT -DgenerateBackupPoms=false
-                        '''
                     }
                 }
             }

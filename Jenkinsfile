@@ -12,6 +12,11 @@ pipeline {
             defaultValue: '1.0.1',
             description: 'Nouvelle version unique (format x.y.z), par exemple 1.0.1'
         )
+        booleanParam(
+            name: 'APPLY_TERRAFORM',
+            defaultValue: false,
+            description: 'Créer ou modifier les ressources AWS (peut entraîner des frais)'
+        )
     }
 
     environment {
@@ -93,11 +98,22 @@ pipeline {
 
         stage('6. Terraform Setup') {
             steps {
-                withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
+                dir('terraform-source') {
+                    git branch: 'master', url: 'https://gitlab.com/ThourayaLouati/docker-spring-boot.git'
                     dir('terraform') {
-                        bat 'terraform init'
-                        bat 'terraform validate'
-                        bat 'terraform apply -auto-approve'
+                        withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                            withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
+                                bat 'terraform init'
+                                bat 'terraform validate'
+                                script {
+                                    if (params.APPLY_TERRAFORM) {
+                                        bat 'terraform apply -auto-approve'
+                                    } else {
+                                        echo 'Terraform apply ignoré. Coche APPLY_TERRAFORM pour déployer les ressources AWS.'
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

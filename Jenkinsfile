@@ -41,28 +41,25 @@ pipeline {
         }
 
         stage('TERRAFORM SETUP') {
-            steps {
-                dir('terraform-source') {
-                    git branch: 'master', url: 'https://gitlab.com/ThourayaLouati/docker-spring-boot.git'
-                    dir('terraform') {
-                        withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
-                            withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
-                                bat 'terraform init'
-                                bat 'terraform validate'
-                                bat 'terraform plan -input=false'
-                                script {
-                                    if (params.APPLY_TERRAFORM) {
-                                        bat 'terraform apply -auto-approve -input=false'
-                                    } else {
-                                        echo 'Terraform apply ignoré. Active APPLY_TERRAFORM seulement après validation de la configuration AWS.'
-                                    }
-                                }
-                            }
+    steps {
+        dir('terraform') {
+            withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
+                    bat 'terraform init'
+                    bat 'terraform validate'
+                    bat 'terraform plan -input=false'
+                    script {
+                        if (params.APPLY_TERRAFORM) {
+                            bat 'terraform apply -auto-approve -input=false'
+                        } else {
+                            echo 'Terraform apply ignoré.'
                         }
                     }
                 }
             }
         }
+    }
+}
 
         stage('MVN CLEAN') {
             steps {

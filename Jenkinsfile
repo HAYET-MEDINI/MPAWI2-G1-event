@@ -40,6 +40,25 @@ pipeline {
             }
         }
 
+        stage('TEST AWS CREDENTIALS') {
+            steps {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
+                        bat '''
+                            @echo off
+                            if not exist "%AWS_CLI%" (
+                                echo AWS CLI not found at "%AWS_CLI%".
+                                exit /b 9009
+                            )
+                            "%AWS_CLI%" sts get-caller-identity --query Account --output text >NUL
+                            if errorlevel 1 exit /b %ERRORLEVEL%
+                            echo AWS credentials are valid.
+                        '''
+                    }
+                }
+            }
+        }
+
         stage('TERRAFORM SETUP') {
     steps {
         dir('terraform') {

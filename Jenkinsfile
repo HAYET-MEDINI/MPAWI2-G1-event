@@ -23,6 +23,7 @@ pipeline {
         JDK_HOME = 'C:\\Program Files\\Java\\jdk-21.0.12'
         MAVEN_HOME = 'C:\\Users\\Hayet\\apache-maven-3.9.9'
         TERRAFORM_HOME = 'D:\\terraform'
+        AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         GIT_BRANCH = 'Hayet-Medini'
@@ -167,7 +168,11 @@ pipeline {
                     withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
                         bat '''
                             @echo off
-                            aws sts get-caller-identity --query Account --output text >NUL
+                            if not exist "%AWS_CLI%" (
+                                echo AWS CLI not found at "%AWS_CLI%".
+                                exit /b 9009
+                            )
+                            "%AWS_CLI%" sts get-caller-identity --query Account --output text >NUL
                             if errorlevel 1 exit /b %ERRORLEVEL%
                             echo AWS credentials are valid.
                         '''

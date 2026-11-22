@@ -17,6 +17,7 @@ pipeline {
     environment {
         JDK_HOME = 'C:\\Program Files\\Java\\jdk-21.0.12'
         MAVEN_HOME = 'C:\\Users\\Hayet\\apache-maven-3.9.9'
+        TERRAFORM_HOME = 'D:\\terraform'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         GIT_BRANCH = 'Hayet-Medini'
@@ -92,10 +93,12 @@ pipeline {
 
         stage('6. Terraform Setup') {
             steps {
-                dir('terraform') {
-                    bat 'terraform init'
-                    bat 'terraform validate'
-                    bat 'terraform apply -auto-approve'
+                withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
+                    dir('terraform') {
+                        bat 'terraform init'
+                        bat 'terraform validate'
+                        bat 'terraform apply -auto-approve'
+                    }
                 }
             }
         }

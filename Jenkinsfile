@@ -42,7 +42,7 @@ pipeline {
 
         stage('TERRAFORM SETUP') {
     steps {
-        dir('docker-spring-boot/terraform') {
+        dir('terraform') {
             withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
                 withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
                     bat 'terraform init'

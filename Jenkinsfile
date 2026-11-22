@@ -24,6 +24,7 @@ pipeline {
         MAVEN_HOME = 'C:\\Users\\Hayet\\apache-maven-3.9.9'
         TERRAFORM_HOME = 'D:\\terraform'
         AWS_CLI = 'C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe'
+        AWS_CLI_HOME = 'C:\\Program Files\\Amazon\\AWSCLIV2'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         GIT_BRANCH = 'Hayet-Medini'
@@ -39,46 +40,6 @@ pipeline {
                 git branch: "${GIT_BRANCH}", url: "${GIT_REPO_URL}"
             }
         }
-
-        stage('TEST AWS CREDENTIALS') {
-            steps {
-                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
-                    withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
-                        bat '''
-                            @echo off
-                            if not exist "%AWS_CLI%" (
-                                echo AWS CLI not found at "%AWS_CLI%".
-                                exit /b 9009
-                            )
-                            "%AWS_CLI%" sts get-caller-identity --query Account --output text >NUL
-                            if errorlevel 1 exit /b %ERRORLEVEL%
-                            echo AWS credentials are valid.
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('TERRAFORM SETUP') {
-    steps {
-        dir('terraform') {
-            withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
-                withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
-                    bat 'terraform init'
-                    bat 'terraform validate'
-                    bat 'terraform plan -input=false'
-                    script {
-                        if (params.APPLY_TERRAFORM) {
-                            bat 'terraform apply -auto-approve -input=false'
-                        } else {
-                            echo 'Terraform apply ignoré.'
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
         stage('MVN CLEAN') {
             steps {
@@ -202,6 +163,84 @@ pipeline {
             }
         }
 
+        stage('Test AWS Credentials') {
+            steps {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
+                        bat '''
+                            @echo off
+                            if not exist "%AWS_CLI%" (
+                                echo AWS CLI not found at "%AWS_CLI%".
+                                exit /b 9009
+                            )
+                            "%AWS_CLI%" sts get-caller-identity --query Account --output text >NUL
+                            if errorlevel 1 exit /b %ERRORLEVEL%
+                            echo AWS credentials are valid.
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('SETUP TERRAFORM') {
+            steps {
+                dir('terraform') {
+                    withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                        withEnv(["PATH+TERRAFORM=${env.TERRAFORM_HOME}"]) {
+                            bat 'terraform init'
+                            bat 'terraform validate'
+                            bat 'terraform plan -input=false'
+                            script {
+                                if (params.APPLY_TERRAFORM) {
+                                    bat 'terraform apply -auto-approve -input=false'
+                                } else {
+                                    echo 'Terraform apply ignoré.'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('UPDATE KUBECONFIG') {
+            steps {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    withEnv(['AWS_DEFAULT_REGION=us-east-1']) {
+                        bat '''
+                            @echo off
+                            if not exist "%WORKSPACE%\\.kube" mkdir "%WORKSPACE%\\.kube"
+                            "%AWS_CLI%" eks update-kubeconfig --name mykubernetes --region us-east-1 --kubeconfig "%WORKSPACE%\\.kube\\config"
+                            if errorlevel 1 exit /b %ERRORLEVEL%
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('DEPLOY TO AWS KUBERNETES') {
+            steps {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                    withEnv([
+                        'AWS_DEFAULT_REGION=us-east-1',
+                        "PATH+AWSCLI=${env.AWS_CLI_HOME}"
+                    ]) {
+                        dir('kubernetes-manifests') {
+                            git branch: 'master', url: 'https://gitlab.com/ThourayaLouati/docker-spring-boot.git'
+                            bat '''
+                                @echo off
+                                set "KUBECONFIG=%WORKSPACE%\\.kube\\config"
+                                kubectl apply -f deployment.yaml
+                                if errorlevel 1 exit /b %ERRORLEVEL%
+                                kubectl apply -f service.yaml
+                                if errorlevel 1 exit /b %ERRORLEVEL%
+                                kubectl rollout status deployment/my-spring-boot-app --timeout=180s
+                            '''
+                        }
+                    }
+                }
+            }
+        }
 
     }
 

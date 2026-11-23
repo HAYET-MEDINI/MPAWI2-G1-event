@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -25,6 +24,7 @@ pipeline {
         JAVA_HOME = 'C:/jdk-21.0.12_windows-x64_bin/jdk-21.0.12'
 
         MAVEN_HOME = 'C:/Users/Omega Informatique/Documents/apache-maven-3.9.16-bin/apache-maven-3.9.16'
+
         DOCKER_HOME = 'C:/Users/Omega Informatique/AppData/Local/Programs/DockerDesktop/resources/bin'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
@@ -200,67 +200,68 @@ pipeline {
         }
 
         // ==========================================
-// 7. PUSH DOCKER IMAGE
-// ==========================================
+        // 7. PUSH DOCKER IMAGE
+        // ==========================================
 
-stage('7. Push Docker image') {
-    options {
-        timeout(time: 30, unit: 'MINUTES')
-    }
+        stage('7. Push Docker image') {
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
 
-    when {
-        expression {
-            fileExists('Dockerfile')
-        }
-    }
+            when {
+                expression {
+                    fileExists('Dockerfile')
+                }
+            }
 
-    steps {
-        retry(3) {
-            withCredentials([
-                usernamePassword(
-                    credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKERHUB_USER',
-                    passwordVariable: 'DOCKERHUB_TOKEN'
-                )
-            ]) {
-                script {
-                    try {
-                        bat '''
-                            @echo off
-                            set "PATH=%DOCKER_HOME%;%PATH%"
+            steps {
+                retry(3) {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'dockerhub-credentials',
+                            usernameVariable: 'DOCKERHUB_USER',
+                            passwordVariable: 'DOCKERHUB_TOKEN'
+                        )
+                    ]) {
+                        script {
+                            try {
+                                bat '''
+                                    @echo off
+                                    set "PATH=%DOCKER_HOME%;%PATH%"
 
-                            echo === Docker Login ===
+                                    echo === Docker Login ===
 
-                            powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
+                                    powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
 
-                            if errorlevel 1 exit /b 1
+                                    if errorlevel 1 exit /b 1
 
-                            echo === Push Build Number Image ===
+                                    echo === Push Build Number Image ===
 
-                            docker push "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%"
+                                    docker push "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%"
 
-                            if errorlevel 1 exit /b 1
+                                    if errorlevel 1 exit /b 1
 
-                            echo === Push Latest Image ===
+                                    echo === Push Latest Image ===
 
-                            docker push "%DOCKERHUB_USER%/eventsproject:latest"
+                                    docker push "%DOCKERHUB_USER%/eventsproject:latest"
 
-                            if errorlevel 1 exit /b 1
+                                    if errorlevel 1 exit /b 1
 
-                            echo === Docker Push Completed ===
-                        '''
-                    } finally {
-                        bat '''
-                            @echo off
-                            set "PATH=%DOCKER_HOME%;%PATH%"
-                            docker logout
-                        '''
+                                    echo === Docker Push Completed ===
+                                '''
+                            } finally {
+                                bat '''
+                                    @echo off
+                                    set "PATH=%DOCKER_HOME%;%PATH%"
+                                    docker logout
+                                '''
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-}
+
         // ==========================================
         // 8. DEPLOY SNAPSHOT TO NEXUS
         // ==========================================
@@ -310,7 +311,7 @@ stage('7. Push Docker image') {
 
             steps {
                 script {
-                    if (!(params.RELEASE_VERSION ==~ /^\d+\.\d+\.\d+$/)) {
+                    if (!(params.RELEASE_VERSION ==~ /^\\d+\\.\\d+\\.\\d+$/)) {
                         error(
                             'RELEASE_VERSION doit être au format x.y.z, exemple 1.0.1'
                         )
@@ -365,7 +366,8 @@ stage('7. Push Docker image') {
                 }
             }
         }
-                // ==========================================
+
+        // ==========================================
         // 10. TEST AWS CREDENTIALS
         // ==========================================
 
@@ -390,54 +392,57 @@ stage('7. Push Docker image') {
                 }
             }
         }
-// ==========================================
-// 11. SETUP TERRAFORM
-// ==========================================
 
-stage('11. Setup Terraform') {
-    steps {
-        withCredentials([
-            file(
-                credentialsId: 'aws-credentials',
-                variable: 'AWS_CREDENTIALS_FILE'
-            )
-        ]) {
-            dir('terraform') {
-                bat '''
-                    @echo off
+        // ==========================================
+        // 11. SETUP TERRAFORM
+        // ==========================================
 
-                    echo === Terraform Init ===
+        stage('11. Setup Terraform') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        bat '''
+                            @echo off
 
-                    docker run --rm ^
-                        -v "%WORKSPACE%:/workspace" ^
-                        -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
-                        -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
-                        -w /workspace/terraform ^
-                        hashicorp/terraform:latest init
+                            echo === Terraform Init ===
 
-                    if errorlevel 1 exit /b 1
+                            docker run --rm ^
+                                -v "%WORKSPACE%:/workspace" ^
+                                -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                                -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                                -w /workspace/terraform ^
+                                hashicorp/terraform:latest init
 
-                    echo === Terraform Validate ===
+                            if errorlevel 1 exit /b 1
 
-                    docker run --rm ^
-                        -v "%WORKSPACE%:/workspace" ^
-                        -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
-                        -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
-                        -w /workspace/terraform ^
-                        hashicorp/terraform:latest validate
+                            echo === Terraform Validate ===
 
-                    if errorlevel 1 exit /b 1
+                            docker run --rm ^
+                                -v "%WORKSPACE%:/workspace" ^
+                                -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
+                                -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
+                                -w /workspace/terraform ^
+                                hashicorp/terraform:latest validate
 
-                    echo ==========================================
-                    echo Terraform Apply SKIPPED
-                    echo AWS Academy SCP restriction detected.
-                    echo Init and Validate completed successfully.
-                    echo ==========================================
-                '''
+                            if errorlevel 1 exit /b 1
+
+                            echo ==========================================
+                            echo Terraform Apply SKIPPED
+                            echo AWS Academy SCP restriction detected.
+                            echo Init and Validate completed successfully.
+                            echo ==========================================
+                        '''
+                    }
+                }
             }
         }
     }
-}
+
     // ==========================================
     // POST ACTIONS
     // ==========================================

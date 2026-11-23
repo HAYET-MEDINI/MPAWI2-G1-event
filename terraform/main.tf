@@ -1,41 +1,112 @@
 provider "aws" {
-  region = var.region
+  region = var.aws_region
 }
 
-# Création d'un VPC simple pour le cluster
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
-
-  name = "${var.cluster_name}-vpc"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["${var.region}a", "${var.region}b", "${var.region}c"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
-
-  enable_nat_gateway = true
-  single_nat_gateway = true
+# VPC par défaut (récupéré dynamiquement)
+data "aws_vpc" "default" {
+  default = true
 }
 
-# Création du cluster EKS
-module "eks" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+# Sous-réseaux du VPC par défaut, sans la zone us-east-1e (non supportée par EKS)
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 
-  cluster_name    = var.cluster_name
-  cluster_version = "1.29"
+  filter {
+    name   = "availability-zone"
+    values = ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+  }
+}
 
-  vpc_id     = module.vpc.vpc_id
-  subnet_ids = module.vpc.private_subnets
+# Rôle LabRole (l'ARN s'adapte au compte courant)
+data "aws_iam_role" "lab" {
+  name = "LabRole"
+}
 
-  # Groupe de nœuds simple
-  eks_managed_node_groups = {
-    default = {
-      min_size     = 1
-      max_size     = 2
-      desired_size = 1
-      instance_types = ["t3.medium"]
-    }
+resource "aws_security_group" "eks_cluster_sg" {
+  name        = "eks-cluster-sg-${var.cluster_name}"
+  description = "Security group for EKS cluster ${var.cluster_name}"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 8083
+    to_port     = 8083
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 30000
+    to_port     = 30000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "eks-cluster-sg-${var.cluster_name}"
+  }
+}
+
+resource "aws_security_group" "eks_worker_sg" {
+  name        = "eks-worker-sg-${var.cluster_name}"
+  description = "Security group for EKS worker nodes ${var.cluster_name}"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port   = 8083
+    to_port     = 8083
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 30000
+    to_port     = 30000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "eks-worker-sg-${var.cluster_name}"
+  }
+}
+
+resource "aws_eks_cluster" "my_cluster" {
+  name     = var.cluster_name
+  role_arn = data.aws_iam_role.lab.arn
+  version  = var.kubernetes_version
+
+  vpc_config {
+    subnet_ids         = data.aws_subnets.default.ids
+    security_group_ids = [aws_security_group.eks_cluster_sg.id]
+  }
+}
+
+resource "aws_eks_node_group" "my_node_group" {
+  cluster_name    = aws_eks_cluster.my_cluster.name
+  node_group_name = "noeud1"
+  node_role_arn   = data.aws_iam_role.lab.arn
+  subnet_ids      = data.aws_subnets.default.ids
+
+  scaling_config {
+    desired_size = 2
+    max_size     = 3
+    min_size     = 1
   }
 }

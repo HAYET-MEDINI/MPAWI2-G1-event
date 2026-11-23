@@ -11,4 +11,8 @@ output "cluster_name" {
 output "cluster_role_arn" {
   description = "L'ARN du rôle IAM du cluster EKS"
   value       = aws_eks_cluster.my_cluster.role_arn  # Utilisation du nom correct du cluster
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 4cecfb7 (modification jenkins)

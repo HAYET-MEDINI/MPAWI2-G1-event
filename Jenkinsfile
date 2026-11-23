@@ -200,53 +200,67 @@ pipeline {
         }
 
         // ==========================================
-        // 7. PUSH DOCKER IMAGE
-        // ==========================================
+// 7. PUSH DOCKER IMAGE
+// ==========================================
 
-        stage('7. Push Docker image') {
-            when {
-                expression {
-                    fileExists('Dockerfile')
-                }
-            }
+stage('7. Push Docker image') {
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+    }
 
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_TOKEN'
-                    )
-                ]) {
-                    script {
-                        try {
-                            bat '''
-                                @echo off
-                                set "PATH=%DOCKER_HOME%;%PATH%"
+    when {
+        expression {
+            fileExists('Dockerfile')
+        }
+    }
 
-                                powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
+    steps {
+        retry(3) {
+            withCredentials([
+                usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_USER',
+                    passwordVariable: 'DOCKERHUB_TOKEN'
+                )
+            ]) {
+                script {
+                    try {
+                        bat '''
+                            @echo off
+                            set "PATH=%DOCKER_HOME%;%PATH%"
 
-                                if errorlevel 1 exit /b 1
+                            echo === Docker Login ===
 
-                                docker push "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%"
+                            powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
 
-                                if errorlevel 1 exit /b 1
+                            if errorlevel 1 exit /b 1
 
-                                docker push "%DOCKERHUB_USER%/eventsproject:latest"
+                            echo === Push Build Number Image ===
 
-                                if errorlevel 1 exit /b 1
-                            '''
-                        } finally {
-                            bat '''
-                                @echo off
-                                docker logout || exit /b 0
-                            '''
-                        }
+                            docker push "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%"
+
+                            if errorlevel 1 exit /b 1
+
+                            echo === Push Latest Image ===
+
+                            docker push "%DOCKERHUB_USER%/eventsproject:latest"
+
+                            if errorlevel 1 exit /b 1
+
+                            echo === Docker Push Completed ===
+                        '''
+                    } finally {
+                        bat '''
+                            @echo off
+                            set "PATH=%DOCKER_HOME%;%PATH%"
+                            docker logout
+                        '''
                     }
                 }
             }
         }
-
+    }
+}
         // ==========================================
         // 8. DEPLOY SNAPSHOT TO NEXUS
         // ==========================================

@@ -413,7 +413,7 @@ stage('11. Setup Terraform') {
                         -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
                         -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
                         -w /workspace/terraform ^
-                        hashicorp/terraform:latest init -upgrade
+                        hashicorp/terraform:latest init
 
                     if errorlevel 1 exit /b 1
 
@@ -428,24 +428,16 @@ stage('11. Setup Terraform') {
 
                     if errorlevel 1 exit /b 1
 
-                    echo === Terraform Apply ===
-
-                    docker run --rm ^
-                        -v "%WORKSPACE%:/workspace" ^
-                        -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
-                        -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
-                        -w /workspace/terraform ^
-                        hashicorp/terraform:latest apply -auto-approve
-
-                    if errorlevel 1 exit /b 1
-
-                    echo Terraform completed successfully.
+                    echo ==========================================
+                    echo Terraform Apply SKIPPED
+                    echo AWS Academy SCP restriction detected.
+                    echo Init and Validate completed successfully.
+                    echo ==========================================
                 '''
             }
         }
     }
 }
-        }
     // ==========================================
     // POST ACTIONS
     // ==========================================

@@ -7,247 +7,188 @@ pipeline {
     }
 
     parameters {
-        booleanParam(
-            name: 'DEPLOY_RELEASE',
-            defaultValue: false,
-            description: 'Publier aussi une version Release dans Nexus'
-        )
-
-        string(
-            name: 'RELEASE_VERSION',
-            defaultValue: '1.0.1',
-            description: 'Version Release au format x.y.z'
-        )
+        booleanParam(name: 'DEPLOY_RELEASE', defaultValue: false, description: 'Publier aussi une version Release dans Nexus')
+        string(name: 'RELEASE_VERSION', defaultValue: '1.0.1', description: 'Version Release au format x.y.z')
     }
 
     environment {
         JAVA_HOME = 'C:/jdk-21.0.12_windows-x64_bin/jdk-21.0.12'
-
         MAVEN_HOME = 'C:/Users/Omega Informatique/Documents/apache-maven-3.9.16-bin/apache-maven-3.9.16'
-
         DOCKER_HOME = 'C:/Users/Omega Informatique/AppData/Local/Programs/DockerDesktop/resources/bin'
+        KUBECTL = 'C:/Users/Omega Informatique/AppData/Local/Programs/DockerDesktop/resources/bin/kubectl.exe'
+        KUBECONFIG = 'C:/Users/Omega Informatique/.kube/config'
 
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         APP_GIT_BRANCH = 'Emna-cherni'
-
         SONAR_URL = 'http://localhost:9000'
         SONAR_PROJECT_KEY = 'eventsProject'
-
         NEXT_SNAPSHOT_VERSION = '1.0.1-SNAPSHOT'
-
         DOCKER_IMAGE_NAME = 'eventsproject'
+
+        K8S_NAMESPACE = 'eventsproject'
+        K8S_APP_PORT = '8080'
+        K8S_NODEPORT = '30080'
     }
 
+
     stages {
-
-        // ==========================================
-        // 1. GIT CHECKOUT
-        // ==========================================
-
-        stage('1. Git checkout') {
+        stage('1. CHECKOUT GIT') {
             steps {
-                git branch: "${APP_GIT_BRANCH}",
-                    url: "${GIT_REPO_URL}"
+                git branch: "${APP_GIT_BRANCH}", url: "${GIT_REPO_URL}"
             }
         }
 
-        // ==========================================
-        // 2. MAVEN CLEAN AND COMPILE
-        // ==========================================
-
-        stage('2. Maven clean and compile') {
+        stage('2. MVN CLEAN') {
             steps {
                 bat '''
                     @echo off
                     set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
                     java --version
                     call mvn --version
-
                     call mvn -B clean compile
-
                     if errorlevel 1 exit /b 1
                 '''
             }
         }
 
-        // ==========================================
-        // 3. UNIT TESTS AND JACOCO
-        // ==========================================
-
-        stage('3. Unit tests and JaCoCo') {
+        stage('3. ARTIFACT CONSTRUCTION') {
             steps {
                 bat '''
                     @echo off
                     set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
-                    call mvn -B test jacoco:report
-
+                    call mvn -B package -DskipTests
                     if errorlevel 1 exit /b 1
                 '''
             }
+        }
 
+        stage('4. UNIT TESTS') {
+            steps {
+                bat '''
+                    @echo off
+                    set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                    call mvn -B test jacoco:report
+                    if errorlevel 1 exit /b 1
+                '''
+            }
             post {
                 always {
-                    junit(
-                        testResults: '**/target/surefire-reports/*.xml',
-                        allowEmptyResults: true
-                    )
-
-                    archiveArtifacts(
-                        artifacts: 'target/site/jacoco/**',
-                        allowEmptyArchive: true
-                    )
+                    junit(testResults: '**/target/surefire-reports/*.xml', allowEmptyResults: true)
+                    archiveArtifacts(artifacts: 'target/site/jacoco/**', allowEmptyArchive: true)
+                }
+                success {
+                    archiveArtifacts(artifacts: 'target/eventsProject-*.jar', excludes: 'target/*.jar.original', fingerprint: true)
                 }
             }
         }
 
-        // ==========================================
-        // 4. SONARQUBE ANALYSIS
-        // ==========================================
-
-        stage('4. SonarQube analysis') {
+        stage('5. MVN SONARQUBE') {
             steps {
-                withCredentials([
-                    string(
-                        credentialsId: 'sonar-token',
-                        variable: 'SONAR_TOKEN'
-                    )
-                ]) {
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     bat '''
                         @echo off
                         set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
                         call mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar ^
                             -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
                             -Dsonar.host.url=%SONAR_URL% ^
                             -Dsonar.token=%SONAR_TOKEN% ^
                             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
-
                         if errorlevel 1 exit /b 1
                     '''
                 }
             }
         }
 
-        // ==========================================
-        // 5. PACKAGE JAR
-        // ==========================================
-
-        stage('5. Package JAR') {
-            steps {
-                bat '''
-                    @echo off
-                    set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
-                    call mvn -B package -DskipTests
-
-                    if errorlevel 1 exit /b 1
-                '''
+        stage('6. PUBLISH TO NEXUS') {
+            when {
+                expression { env.APP_GIT_BRANCH == 'Emna-cherni' }
             }
+            steps {
+                withCredentials([file(credentialsId: 'nexus-maven-settings', variable: 'MAVEN_SETTINGS')]) {
+                    bat '''
+                        @echo off
+                        set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                        call mvn -B -s "%MAVEN_SETTINGS%" deploy -DskipTests
+                        if errorlevel 1 exit /b 1
+                    '''
+                }
 
-            post {
-                success {
-                    archiveArtifacts(
-                        artifacts: 'target/eventsProject-*.jar',
-                        excludes: 'target/*.jar.original',
-                        fingerprint: true
-                    )
+                script {
+                    if (params.DEPLOY_RELEASE) {
+                        if (!(params.RELEASE_VERSION ==~ /^\\d+\\.\\d+\\.\\d+$/)) {
+                            error('RELEASE_VERSION doit être au format x.y.z, exemple 1.0.1')
+                        }
+                        withCredentials([file(credentialsId: 'nexus-maven-settings', variable: 'MAVEN_SETTINGS')]) {
+                            withEnv(["RELEASE_VERSION=${params.RELEASE_VERSION}"]) {
+                                try {
+                                    bat '''
+                                        @echo off
+                                        set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                                        call mvn -B versions:set -DnewVersion=%RELEASE_VERSION% -DgenerateBackupPoms=false
+                                        if errorlevel 1 exit /b 1
+                                        call mvn -B -s "%MAVEN_SETTINGS%" deploy -DskipTests
+                                        if errorlevel 1 exit /b 1
+                                    '''
+                                } finally {
+                                    bat '''
+                                        @echo off
+                                        set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
+                                        call mvn -B versions:set -DnewVersion=%NEXT_SNAPSHOT_VERSION% -DgenerateBackupPoms=false
+                                        if errorlevel 1 exit /b 1
+                                    '''
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // ==========================================
-        // 6. BUILD DOCKER IMAGE
-        // ==========================================
-
-        stage('6. Build Docker image') {
+        stage('7. BUILDING OUR IMAGE') {
             when {
-                expression {
-                    fileExists('Dockerfile')
-                }
+                expression { fileExists('Dockerfile') }
             }
-
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-credentials',
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_TOKEN'
-                    )
-                ]) {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
                     bat '''
                         @echo off
                         set "PATH=%DOCKER_HOME%;%PATH%"
-
                         docker --version
-                        if errorlevel 1 exit /b 1
-
                         docker info >nul 2>&1
                         if errorlevel 1 (
-                            echo Docker daemon is unavailable to the Jenkins agent.
+                            echo Docker daemon is unavailable to Jenkins.
                             exit /b 1
                         )
-
                         docker build ^
                             -t "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%" ^
                             -t "%DOCKERHUB_USER%/eventsproject:latest" .
-
                         if errorlevel 1 exit /b 1
                     '''
                 }
             }
         }
 
-        // ==========================================
-        // 7. PUSH DOCKER IMAGE
-        // ==========================================
-
-        stage('7. Push Docker image') {
+        stage('8. DEPLOY OUR IMAGE') {
             options {
                 timeout(time: 30, unit: 'MINUTES')
             }
-
             when {
-                expression {
-                    fileExists('Dockerfile')
-                }
+                expression { fileExists('Dockerfile') }
             }
-
             steps {
                 retry(3) {
-                    withCredentials([
-                        usernamePassword(
-                            credentialsId: 'dockerhub-credentials',
-                            usernameVariable: 'DOCKERHUB_USER',
-                            passwordVariable: 'DOCKERHUB_TOKEN'
-                        )
-                    ]) {
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
                         script {
                             try {
                                 bat '''
                                     @echo off
                                     set "PATH=%DOCKER_HOME%;%PATH%"
-
-                                    echo === Docker Login ===
-
                                     powershell.exe -NoProfile -NonInteractive -Command "$env:DOCKERHUB_TOKEN | docker login --username $env:DOCKERHUB_USER --password-stdin"
-
                                     if errorlevel 1 exit /b 1
-
-                                    echo === Push Build Number Image ===
-
                                     docker push "%DOCKERHUB_USER%/eventsproject:%BUILD_NUMBER%"
-
                                     if errorlevel 1 exit /b 1
-
-                                    echo === Push Latest Image ===
-
                                     docker push "%DOCKERHUB_USER%/eventsproject:latest"
-
                                     if errorlevel 1 exit /b 1
-
-                                    echo === Docker Push Completed ===
                                 '''
                             } finally {
                                 bat '''
@@ -262,180 +203,172 @@ pipeline {
             }
         }
 
-        // ==========================================
-        // 8. DEPLOY SNAPSHOT TO NEXUS
-        // ==========================================
-
-        stage('8. Deploy snapshot to Nexus') {
-            when {
-                expression {
-                    env.APP_GIT_BRANCH == 'Emna-cherni'
-                }
-            }
-
+        stage('9. Test AWS Credentials') {
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'nexus-maven-settings',
-                        variable: 'MAVEN_SETTINGS'
-                    )
-                ]) {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_CREDENTIALS_FILE')]) {
                     bat '''
                         @echo off
-                        set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
-                        call mvn -B -s "%MAVEN_SETTINGS%" deploy -DskipTests
-
-                        if errorlevel 1 exit /b 1
-                    '''
-                }
-            }
-        }
-
-        // ==========================================
-        // 9. DEPLOY RELEASE TO NEXUS
-        // ==========================================
-
-        stage('9. Deploy release to Nexus') {
-            when {
-                allOf {
-                    expression {
-                        env.APP_GIT_BRANCH == 'Emna-cherni'
-                    }
-
-                    expression {
-                        params.DEPLOY_RELEASE
-                    }
-                }
-            }
-
-            steps {
-                script {
-                    if (!(params.RELEASE_VERSION ==~ /^\\d+\\.\\d+\\.\\d+$/)) {
-                        error(
-                            'RELEASE_VERSION doit être au format x.y.z, exemple 1.0.1'
-                        )
-                    }
-                }
-
-                withCredentials([
-                    file(
-                        credentialsId: 'nexus-maven-settings',
-                        variable: 'MAVEN_SETTINGS'
-                    )
-                ]) {
-                    withEnv([
-                        "RELEASE_VERSION=${params.RELEASE_VERSION}"
-                    ]) {
-                        script {
-                            try {
-                                bat '''
-                                    @echo off
-                                    set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
-                                    echo Setting Release version...
-
-                                    call mvn -B versions:set ^
-                                        -DnewVersion=%RELEASE_VERSION% ^
-                                        -DgenerateBackupPoms=false
-
-                                    if errorlevel 1 exit /b 1
-
-                                    echo Deploying Release to Nexus...
-
-                                    call mvn -B -s "%MAVEN_SETTINGS%" deploy -DskipTests
-
-                                    if errorlevel 1 exit /b 1
-                                '''
-                            } finally {
-                                bat '''
-                                    @echo off
-                                    set "PATH=%JAVA_HOME%\\bin;%MAVEN_HOME%\\bin;%PATH%"
-
-                                    echo Restoring Snapshot version...
-
-                                    call mvn -B versions:set ^
-                                        -DnewVersion=%NEXT_SNAPSHOT_VERSION% ^
-                                        -DgenerateBackupPoms=false
-
-                                    if errorlevel 1 exit /b 1
-                                '''
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ==========================================
-        // 10. TEST AWS CREDENTIALS
-        // ==========================================
-
-        stage('10. Test AWS Credentials') {
-            steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'aws-credentials',
-                        variable: 'AWS_CREDENTIALS_FILE'
-                    )
-                ]) {
-                    bat '''
-                        @echo off
-
                         docker run --rm ^
                             -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
                             -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
                             amazon/aws-cli sts get-caller-identity
-
                         if errorlevel 1 exit /b 1
                     '''
                 }
             }
         }
 
-        // ==========================================
-        // 11. SETUP TERRAFORM
-        // ==========================================
-
-        stage('11. Setup Terraform') {
+        stage('10. SETUP TERRAFORM') {
             steps {
-                withCredentials([
-                    file(
-                        credentialsId: 'aws-credentials',
-                        variable: 'AWS_CREDENTIALS_FILE'
-                    )
-                ]) {
+                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_CREDENTIALS_FILE')]) {
                     dir('terraform') {
                         bat '''
                             @echo off
-
                             echo === Terraform Init ===
-
                             docker run --rm ^
                                 -v "%WORKSPACE%:/workspace" ^
                                 -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
                                 -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
                                 -w /workspace/terraform ^
                                 hashicorp/terraform:latest init
-
                             if errorlevel 1 exit /b 1
 
                             echo === Terraform Validate ===
-
                             docker run --rm ^
                                 -v "%WORKSPACE%:/workspace" ^
                                 -v "%AWS_CREDENTIALS_FILE%:/root/.aws/credentials:ro" ^
                                 -e AWS_SHARED_CREDENTIALS_FILE=/root/.aws/credentials ^
                                 -w /workspace/terraform ^
                                 hashicorp/terraform:latest validate
-
                             if errorlevel 1 exit /b 1
 
-                            echo ==========================================
-                            echo Terraform Apply SKIPPED
-                            echo AWS Academy SCP restriction detected.
-                            echo Init and Validate completed successfully.
-                            echo ==========================================
+                            echo Terraform Apply skipped: AWS Academy SCP restriction.
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('11. UPDATE KUBECONFIG') {
+            steps {
+                bat '''
+                    @echo off
+                    echo === Check Kubeconfig ===
+                    if not exist "%KUBECONFIG%" (
+                        echo Kubeconfig file not found: %KUBECONFIG%
+                        exit /b 1
+                    )
+
+                    echo === Set Minikube context ===
+                    "%KUBECTL%" config use-context minikube
+                    if errorlevel 1 exit /b 1
+
+                    echo === Current context ===
+                    "%KUBECTL%" config current-context
+                    if errorlevel 1 exit /b 1
+
+                    echo === Kubernetes Cluster Info ===
+                    "%KUBECTL%" cluster-info
+                    if errorlevel 1 exit /b 1
+
+                    echo === Nodes ===
+                    "%KUBECTL%" get nodes
+                    if errorlevel 1 exit /b 1
+                '''
+            }
+        }
+
+
+        stage('12. DEPLOY TO AWS KUBERNETES') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
+                    script {
+                        def deploymentYaml = [
+                            'apiVersion: apps/v1',
+                            'kind: Deployment',
+                            'metadata:',
+                            '  name: eventsproject',
+                            '  namespace: ' + env.K8S_NAMESPACE,
+                            '  labels:',
+                            '    app: eventsproject',
+                            'spec:',
+                            '  replicas: 1',
+                            '  selector:',
+                            '    matchLabels:',
+                            '      app: eventsproject',
+                            '  template:',
+                            '    metadata:',
+                            '      labels:',
+                            '        app: eventsproject',
+                            '    spec:',
+                            '      containers:',
+                            '      - name: eventsproject',
+                            '        image: ' + env.DOCKERHUB_USER + '/eventsproject:' + env.BUILD_NUMBER,
+                            '        imagePullPolicy: Always',
+                            '        ports:',
+                            '        - containerPort: ' + env.K8S_APP_PORT,
+                            '        readinessProbe:',
+                            '          tcpSocket:',
+                            '            port: ' + env.K8S_APP_PORT,
+                            '          initialDelaySeconds: 20',
+                            '          periodSeconds: 10',
+                            '        livenessProbe:',
+                            '          tcpSocket:',
+                            '            port: ' + env.K8S_APP_PORT,
+                            '          initialDelaySeconds: 40',
+                            '          periodSeconds: 20'
+                        ].join('\n') + '\n'
+
+                        def serviceYaml = [
+                            'apiVersion: v1',
+                            'kind: Service',
+                            'metadata:',
+                            '  name: eventsproject-service',
+                            '  namespace: ' + env.K8S_NAMESPACE,
+                            'spec:',
+                            '  type: NodePort',
+                            '  selector:',
+                            '    app: eventsproject',
+                            '  ports:',
+                            '  - name: http',
+                            '    port: ' + env.K8S_APP_PORT,
+                            '    targetPort: ' + env.K8S_APP_PORT,
+                            '    nodePort: ' + env.K8S_NODEPORT
+                        ].join('\n') + '\n'
+
+                        writeFile(file: 'k8s-deployment.yaml', text: deploymentYaml)
+                        writeFile(file: 'k8s-service.yaml', text: serviceYaml)
+
+                        bat '''
+                            @echo off
+                            echo === Create Namespace ===
+                            "%KUBECTL%" create namespace eventsproject --dry-run=client -o yaml | "%KUBECTL%" apply -f -
+                            if errorlevel 1 exit /b 1
+
+                            echo === Apply Deployment ===
+                            "%KUBECTL%" apply -f k8s-deployment.yaml
+                            if errorlevel 1 exit /b 1
+
+                            echo === Apply Service ===
+                            "%KUBECTL%" apply -f k8s-service.yaml
+                            if errorlevel 1 exit /b 1
+
+                            echo === Wait for Rollout ===
+                            "%KUBECTL%" rollout status deployment/eventsproject -n eventsproject --timeout=180s
+                            if errorlevel 1 (
+                                echo Deployment rollout failed.
+                                "%KUBECTL%" describe deployment eventsproject -n eventsproject
+                                "%KUBECTL%" get pods -n eventsproject -o wide
+                                "%KUBECTL%" logs deployment/eventsproject -n eventsproject --all-containers=true
+                                exit /b 1
+                            )
+
+                            echo === Deployment ===
+                            "%KUBECTL%" get deployments -n eventsproject
+                            echo === Pods ===
+                            "%KUBECTL%" get pods -n eventsproject
+                            echo === Service ===
+                            "%KUBECTL%" get service eventsproject-service -n eventsproject
                         '''
                     }
                 }
@@ -443,19 +376,14 @@ pipeline {
         }
     }
 
-    // ==========================================
-    // POST ACTIONS
-    // ==========================================
 
     post {
         success {
-            echo 'Pipeline termine avec succes.'
+            echo 'Pipeline terminé avec succès.'
         }
-
         failure {
-            echo 'Pipeline en echec. Consultez la sortie de la console.'
+            echo 'Pipeline en échec. Consultez la sortie de la console.'
         }
-
         always {
             echo 'Fin du pipeline.'
         }

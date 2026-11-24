@@ -26,7 +26,7 @@ pipeline {
         DOCKER_IMAGE_NAME = 'eventsproject'
 
         K8S_NAMESPACE = 'eventsproject'
-        K8S_APP_PORT = '8080'
+        K8S_APP_PORT = '8089'
         K8S_NODEPORT = '30080'
     }
 

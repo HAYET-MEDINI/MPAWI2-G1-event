@@ -286,7 +286,6 @@ stage('11. UPDATE KUBECONFIG') {
     }
 }
 
-
 stage('12. DEPLOY TO MINIKUBE KUBERNETES') {
     options {
         timeout(time: 30, unit: 'MINUTES')
@@ -369,25 +368,34 @@ spec:
                     @echo off
 
                     echo =====================================
-                    echo       DEPLOY MYSQL
+                    echo       MYSQL CHECK / DEPLOY
                     echo =====================================
 
-                    if not exist "k8s\\mysql.yaml" (
-                        echo ERROR: k8s\\mysql.yaml not found
+                    if exist "k8s\\mysql.yaml" (
+                        echo MySQL manifest found. Applying it...
+                        "%KUBECTL%" apply -f k8s\\mysql.yaml
+                        if errorlevel 1 exit /b 1
+                    ) else (
+                        echo MySQL manifest not found in repository.
+                        echo Using the existing MySQL deployment in Minikube.
+                    )
+
+                    echo === Check MySQL Deployment ===
+                    "%KUBECTL%" get deployment mysql -n eventsproject
+
+                    if errorlevel 1 (
+                        echo ERROR: MySQL deployment does not exist.
                         exit /b 1
                     )
 
-                    "%KUBECTL%" apply -f k8s\\mysql.yaml
-                    if errorlevel 1 exit /b 1
-
-                    echo === Wait for MySQL ===
-
+                    echo === Wait for MySQL Ready ===
                     "%KUBECTL%" rollout status deployment/mysql -n eventsproject --timeout=180s
 
                     if errorlevel 1 (
-                        echo MySQL deployment failed
+                        echo MySQL deployment is not ready.
                         "%KUBECTL%" get pods -n eventsproject
                         "%KUBECTL%" describe deployment mysql -n eventsproject
+                        "%KUBECTL%" logs deployment/mysql -n eventsproject
                         exit /b 1
                     )
 
@@ -406,7 +414,7 @@ spec:
                     "%KUBECTL%" rollout status deployment/eventsproject -n eventsproject --timeout=180s
 
                     if errorlevel 1 (
-                        echo Application deployment failed
+                        echo Application deployment failed.
 
                         echo === Deployment Details ===
                         "%KUBECTL%" describe deployment eventsproject -n eventsproject
@@ -440,6 +448,7 @@ spec:
         }
     }
 }
+
 
 
     } // close stages

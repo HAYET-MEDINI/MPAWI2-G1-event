@@ -442,6 +442,8 @@ spec:
 }
 
 
+    } // close stages
+
     post {
         success {
             echo 'Pipeline terminé avec succès.'
@@ -453,5 +455,4 @@ spec:
             echo 'Fin du pipeline.'
         }
     }
-}
 }

@@ -249,132 +249,197 @@ pipeline {
             }
         }
 
-        stage('11. UPDATE KUBECONFIG') {
-            steps {
+stage('11. UPDATE KUBECONFIG') {
+    steps {
+        bat '''
+            @echo off
+
+            echo === Check Kubeconfig ===
+            if not exist "%KUBECONFIG%" (
+                echo Kubeconfig file not found: %KUBECONFIG%
+                exit /b 1
+            )
+
+            echo === Set Minikube Context ===
+            "%KUBECTL%" config use-context minikube
+            if errorlevel 1 exit /b 1
+
+            echo === Current Context ===
+            "%KUBECTL%" config current-context
+            if errorlevel 1 exit /b 1
+
+            echo === Check Kubernetes Cluster ===
+            "%KUBECTL%" cluster-info
+            if errorlevel 1 exit /b 1
+
+            echo === Check Nodes ===
+            "%KUBECTL%" get nodes
+            if errorlevel 1 exit /b 1
+
+            echo === Create Namespace if necessary ===
+            "%KUBECTL%" create namespace eventsproject --dry-run=client -o yaml | "%KUBECTL%" apply -f -
+            if errorlevel 1 exit /b 1
+
+            echo === Namespace ===
+            "%KUBECTL%" get namespace eventsproject
+        '''
+    }
+}
+
+
+stage('12. DEPLOY TO MINIKUBE KUBERNETES') {
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-credentials',
+                usernameVariable: 'DOCKERHUB_USER',
+                passwordVariable: 'DOCKERHUB_TOKEN'
+            )
+        ]) {
+            script {
+
+                def deploymentYaml = """
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventsproject
+  namespace: ${env.K8S_NAMESPACE}
+  labels:
+    app: eventsproject
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eventsproject
+  template:
+    metadata:
+      labels:
+        app: eventsproject
+    spec:
+      containers:
+      - name: eventsproject
+        image: ${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: ${env.K8S_APP_PORT}
+        readinessProbe:
+          tcpSocket:
+            port: ${env.K8S_APP_PORT}
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: ${env.K8S_APP_PORT}
+          initialDelaySeconds: 40
+          periodSeconds: 20
+"""
+
+                def serviceYaml = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventsproject-service
+  namespace: ${env.K8S_NAMESPACE}
+spec:
+  type: NodePort
+  selector:
+    app: eventsproject
+  ports:
+  - name: http
+    port: ${env.K8S_APP_PORT}
+    targetPort: ${env.K8S_APP_PORT}
+    nodePort: ${env.K8S_NODEPORT}
+"""
+
+                writeFile(
+                    file: 'k8s-deployment.yaml',
+                    text: deploymentYaml
+                )
+
+                writeFile(
+                    file: 'k8s-service.yaml',
+                    text: serviceYaml
+                )
+
                 bat '''
                     @echo off
-                    echo === Check Kubeconfig ===
-                    if not exist "%KUBECONFIG%" (
-                        echo Kubeconfig file not found: %KUBECONFIG%
+
+                    echo =====================================
+                    echo       DEPLOY MYSQL
+                    echo =====================================
+
+                    if not exist "k8s\\mysql.yaml" (
+                        echo ERROR: k8s\\mysql.yaml not found
                         exit /b 1
                     )
 
-                    echo === Set Minikube context ===
-                    "%KUBECTL%" config use-context minikube
+                    "%KUBECTL%" apply -f k8s\\mysql.yaml
                     if errorlevel 1 exit /b 1
 
-                    echo === Current context ===
-                    "%KUBECTL%" config current-context
+                    echo === Wait for MySQL ===
+
+                    "%KUBECTL%" rollout status deployment/mysql -n eventsproject --timeout=180s
+
+                    if errorlevel 1 (
+                        echo MySQL deployment failed
+                        "%KUBECTL%" get pods -n eventsproject
+                        "%KUBECTL%" describe deployment mysql -n eventsproject
+                        exit /b 1
+                    )
+
+                    echo =====================================
+                    echo       DEPLOY APPLICATION
+                    echo =====================================
+
+                    "%KUBECTL%" apply -f k8s-deployment.yaml
                     if errorlevel 1 exit /b 1
 
-                    echo === Kubernetes Cluster Info ===
-                    "%KUBECTL%" cluster-info
+                    "%KUBECTL%" apply -f k8s-service.yaml
                     if errorlevel 1 exit /b 1
 
-                    echo === Nodes ===
-                    "%KUBECTL%" get nodes
-                    if errorlevel 1 exit /b 1
+                    echo === Wait for Application ===
+
+                    "%KUBECTL%" rollout status deployment/eventsproject -n eventsproject --timeout=180s
+
+                    if errorlevel 1 (
+                        echo Application deployment failed
+
+                        echo === Deployment Details ===
+                        "%KUBECTL%" describe deployment eventsproject -n eventsproject
+
+                        echo === Pods ===
+                        "%KUBECTL%" get pods -n eventsproject -o wide
+
+                        echo === Application Logs ===
+                        "%KUBECTL%" logs deployment/eventsproject -n eventsproject --all-containers=true
+
+                        exit /b 1
+                    )
+
+                    echo =====================================
+                    echo       DEPLOYMENT SUCCESS
+                    echo =====================================
+
+                    echo === Deployments ===
+                    "%KUBECTL%" get deployments -n eventsproject
+
+                    echo === Pods ===
+                    "%KUBECTL%" get pods -n eventsproject -o wide
+
+                    echo === Services ===
+                    "%KUBECTL%" get services -n eventsproject
+
+                    echo === Application Service ===
+                    "%KUBECTL%" get service eventsproject-service -n eventsproject
                 '''
             }
         }
-
-
-        stage('12. DEPLOY TO AWS KUBERNETES') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
-                    script {
-                        def deploymentYaml = [
-                            'apiVersion: apps/v1',
-                            'kind: Deployment',
-                            'metadata:',
-                            '  name: eventsproject',
-                            '  namespace: ' + env.K8S_NAMESPACE,
-                            '  labels:',
-                            '    app: eventsproject',
-                            'spec:',
-                            '  replicas: 1',
-                            '  selector:',
-                            '    matchLabels:',
-                            '      app: eventsproject',
-                            '  template:',
-                            '    metadata:',
-                            '      labels:',
-                            '        app: eventsproject',
-                            '    spec:',
-                            '      containers:',
-                            '      - name: eventsproject',
-                            '        image: ' + env.DOCKERHUB_USER + '/eventsproject:' + env.BUILD_NUMBER,
-                            '        imagePullPolicy: Always',
-                            '        ports:',
-                            '        - containerPort: ' + env.K8S_APP_PORT,
-                            '        readinessProbe:',
-                            '          tcpSocket:',
-                            '            port: ' + env.K8S_APP_PORT,
-                            '          initialDelaySeconds: 20',
-                            '          periodSeconds: 10',
-                            '        livenessProbe:',
-                            '          tcpSocket:',
-                            '            port: ' + env.K8S_APP_PORT,
-                            '          initialDelaySeconds: 40',
-                            '          periodSeconds: 20'
-                        ].join('\n') + '\n'
-
-                        def serviceYaml = [
-                            'apiVersion: v1',
-                            'kind: Service',
-                            'metadata:',
-                            '  name: eventsproject-service',
-                            '  namespace: ' + env.K8S_NAMESPACE,
-                            'spec:',
-                            '  type: NodePort',
-                            '  selector:',
-                            '    app: eventsproject',
-                            '  ports:',
-                            '  - name: http',
-                            '    port: ' + env.K8S_APP_PORT,
-                            '    targetPort: ' + env.K8S_APP_PORT,
-                            '    nodePort: ' + env.K8S_NODEPORT
-                        ].join('\n') + '\n'
-
-                        writeFile(file: 'k8s-deployment.yaml', text: deploymentYaml)
-                        writeFile(file: 'k8s-service.yaml', text: serviceYaml)
-
-                        bat '''
-                            @echo off
-                            echo === Create Namespace ===
-                            "%KUBECTL%" create namespace eventsproject --dry-run=client -o yaml | "%KUBECTL%" apply -f -
-                            if errorlevel 1 exit /b 1
-
-                            echo === Apply Deployment ===
-                            "%KUBECTL%" apply -f k8s-deployment.yaml
-                            if errorlevel 1 exit /b 1
-
-                            echo === Apply Service ===
-                            "%KUBECTL%" apply -f k8s-service.yaml
-                            if errorlevel 1 exit /b 1
-
-                            echo === Wait for Rollout ===
-                            "%KUBECTL%" rollout status deployment/eventsproject -n eventsproject --timeout=180s
-                            if errorlevel 1 (
-                                echo Deployment rollout failed.
-                                "%KUBECTL%" describe deployment eventsproject -n eventsproject
-                                "%KUBECTL%" get pods -n eventsproject -o wide
-                                "%KUBECTL%" logs deployment/eventsproject -n eventsproject --all-containers=true
-                                exit /b 1
-                            )
-
-                            echo === Deployment ===
-                            "%KUBECTL%" get deployments -n eventsproject
-                            echo === Pods ===
-                            "%KUBECTL%" get pods -n eventsproject
-                            echo === Service ===
-                            "%KUBECTL%" get service eventsproject-service -n eventsproject
-                        '''
-                    }
-                }
-            }
-        }
     }
+}
 
 
     post {

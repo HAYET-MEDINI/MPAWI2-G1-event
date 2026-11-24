@@ -423,7 +423,13 @@ spec:
                         "%KUBECTL%" get pods -n eventsproject -o wide
 
                         echo === Application Logs ===
-                        "%KUBECTL%" logs deployment/eventsproject -n eventsproject --all-containers=true
+                        echo === Logs of failed application pods ===
+
+                        "%KUBECTL%" get pods -n eventsproject -l app=eventsproject
+                        
+                        "%KUBECTL%" logs eventsproject-5b4c5db999-mchfp -n eventsproject --previous
+                        
+                        "%KUBECTL%" logs eventsproject-5b4c5db999-mchfp -n eventsproject
 
                         exit /b 1
                     )

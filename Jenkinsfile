@@ -10,9 +10,8 @@ pipeline {
         GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
         GIT_BRANCH   = 'Aloui-Abir'
 
-        // Services accessibles depuis le conteneur Jenkins
-        SONAR_URL = 'http://192.168.100.9:9000'
-        NEXUS_URL = 'http://192.168.100.9:8081'
+       SONAR_URL = 'http://host.docker.internal:9000'
+       NEXUS_URL = 'http://host.docker.internal:8081'
         
         
         // Configuration Docker Hub

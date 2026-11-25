@@ -13,7 +13,7 @@ spec:
         app: eventsproject
     spec:
       containers:
-      - name: eventsproject
-        image: alouiabir/eventsproject:latest
-        ports:
-        - containerPort: 8080
+        - name: eventsproject
+          image: alouiabir/eventsproject:latest
+          ports:
+            - containerPort: 8080

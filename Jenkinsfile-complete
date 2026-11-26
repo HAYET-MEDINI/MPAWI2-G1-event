@@ -1,0 +1,416 @@
+
+pipeline {
+    agent any
+
+    parameters {
+        booleanParam(
+            name: 'DEPLOY_RELEASE',
+            defaultValue: false,
+            description: 'Déployer une version Release'
+        )
+        string(
+            name: 'RELEASE_VERSION',
+            defaultValue: '1.0.1',
+            description: 'Version Release au format x.y.z'
+        )
+    }
+
+    environment {
+        GIT_REPO_URL = 'https://github.com/HAYET-MEDINI/MPAWI2-G1-event.git'
+        GIT_BRANCH = 'mayssa'
+
+        SONAR_URL = 'http://sonarqube:9000'
+        SONAR_PROJECT_KEY = 'eventsProject'
+        SNAPSHOT_VERSION = '1.0.0-SNAPSHOT'
+
+        DOCKER_IMAGE = 'mayssahamdanii/docker-spring-boot'
+        DOCKER_CREDENTIALS = 'dockerhub'
+
+        AWS_DEFAULT_REGION = 'us-east-1'
+        CLUSTER_NAME = 'mykubernetes'
+        TERRAFORM_DIR = 'terraform'
+        KUBECONFIG = "${WORKSPACE}/.kube/config"
+    }
+
+    stages {
+
+        // 1. RECUPERATION DU PROJET
+        stage('1. Git Checkout') {
+            steps {
+                git branch: "${GIT_BRANCH}",
+                    url: "${GIT_REPO_URL}"
+            }
+        }
+
+        // 2. MAVEN
+        stage('2. Maven Clean & Compile') {
+            steps {
+                sh 'chmod +x mvnw'
+                sh './mvnw clean compile'
+            }
+        }
+
+        // 3. TESTS ET JACOCO
+        stage('3. Unit Tests & JaCoCo') {
+            steps {
+                sh './mvnw verify'
+            }
+            post {
+                always {
+                    junit(
+                        allowEmptyResults: true,
+                        testResults: '**/target/surefire-reports/*.xml'
+                    )
+                    archiveArtifacts(
+                        allowEmptyArchive: true,
+                        artifacts: '**/target/site/jacoco/**'
+                    )
+                }
+            }
+        }
+
+        // 4. SONARQUBE
+        stage('4. SonarQube Analysis') {
+            steps {
+                sh '''
+                    echo "Verification du rapport JaCoCo"
+                    test -f target/site/jacoco/jacoco.xml
+                '''
+
+                withCredentials([
+                    string(
+                        credentialsId: 'sonar-token',
+                        variable: 'SONAR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        ./mvnw org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                        -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+                        -Dsonar.host.url="$SONAR_URL" \
+                        -Dsonar.token="$SONAR_TOKEN" \
+                        -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                    '''
+                }
+            }
+        }
+
+        // 5. CREATION DU JAR
+        stage('5. Package JAR') {
+            steps {
+                sh './mvnw package -DskipTests'
+            }
+            post {
+                success {
+                    archiveArtifacts(
+                        artifacts: 'target/*.jar',
+                        excludes: 'target/*.jar.original',
+                        fingerprint: true
+                    )
+                }
+            }
+        }
+
+        // 6. PUBLICATION SNAPSHOT
+        stage('6. Deploy Snapshot to Nexus') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'maven-settings',
+                        variable: 'MAVEN_SETTINGS'
+                    )
+                ]) {
+                    sh '''
+                        ./mvnw deploy \
+                        -DskipTests \
+                        -s "$MAVEN_SETTINGS"
+                    '''
+                }
+            }
+        }
+
+        // 7. PUBLICATION RELEASE (OPTIONNELLE)
+        stage('7. Deploy Release to Nexus') {
+            when {
+                expression {
+                    return params.DEPLOY_RELEASE
+                }
+            }
+            steps {
+                script {
+                    def releaseVersion = params.RELEASE_VERSION?.trim()
+
+                    if (!(releaseVersion ==~ /^\d+\.\d+\.\d+$/)) {
+                        error('RELEASE_VERSION doit être au format x.y.z')
+                    }
+
+                    if (releaseVersion == env.SNAPSHOT_VERSION) {
+                        error('La version Release doit être différente de SNAPSHOT')
+                    }
+
+                    try {
+                        sh """
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${releaseVersion} \
+                            -DgenerateBackupPoms=false
+                        """
+
+                        withCredentials([
+                            file(
+                                credentialsId: 'maven-settings',
+                                variable: 'MAVEN_SETTINGS'
+                            )
+                        ]) {
+                            sh '''
+                                ./mvnw -B -ntp deploy \
+                                -DskipTests \
+                                -s "$MAVEN_SETTINGS"
+                            '''
+                        }
+                    } finally {
+                        sh """
+                            ./mvnw -B -ntp versions:set \
+                            -DnewVersion=${env.SNAPSHOT_VERSION} \
+                            -DgenerateBackupPoms=false
+                        """
+                    }
+                }
+            }
+        }
+
+        // 8. CONSTRUCTION IMAGE DOCKER
+        stage('8. Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} .
+                    docker tag ${DOCKER_IMAGE}:${BUILD_NUMBER} ${DOCKER_IMAGE}:latest
+                '''
+            }
+        }
+
+        // 9. PUBLICATION DOCKER HUB
+        stage('9. Push Docker Image') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: "${DOCKER_CREDENTIALS}",
+                        variable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    withEnv(["DOCKER_USERNAME=mayssahamdanii"]) {
+                        sh '''
+                            echo "$DOCKER_PASSWORD" | docker login \
+                                -u "$DOCKER_USERNAME" \
+                                --password-stdin
+
+                            docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}
+                            docker push ${DOCKER_IMAGE}:latest
+
+                            docker logout
+                        '''
+                    }
+                }
+            }
+        }
+
+        // 10. VERIFICATION AWS
+        stage('10. Test AWS Credentials') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    sh 'aws sts get-caller-identity'
+                }
+            }
+        }
+
+        // 11. INITIALISATION TERRAFORM
+        stage('11. Setup Terraform') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        sh 'terraform init -input=false'
+                        sh 'terraform validate'
+                    }
+                }
+            }
+        }
+
+        // 12. IMPORT DES RESSOURCES EXISTANTES
+        stage('12. Import Existing AWS Resources') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        sh '''
+                            if ! terraform state list | grep -q '^aws_eks_cluster.my_cluster$'; then
+                                terraform import aws_eks_cluster.my_cluster mykubernetes
+                            fi
+
+                            if ! terraform state list | grep -q '^aws_eks_node_group.my_node_group$'; then
+                                terraform import aws_eks_node_group.my_node_group mykubernetes:noeud1
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
+
+        // 13. PLAN TERRAFORM
+        stage('13. Terraform Plan') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        sh 'terraform plan -input=false -out=tfplan'
+                    }
+                }
+            }
+        }
+
+        // 14. APPROBATION MANUELLE
+        stage('14. Approve Terraform Apply') {
+            steps {
+                input(
+                    message: 'Examine le Terraform Plan avant de continuer. Approuves-tu les modifications AWS ?',
+                    ok: 'Continuer'
+                )
+            }
+        }
+
+        // 15. APPLICATION TERRAFORM
+        stage('15. Terraform Apply') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    dir('terraform') {
+                        sh 'terraform apply -input=false -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+
+        // 16. CONFIGURATION KUBECTL
+        stage('16. Update Kubeconfig') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    sh '''
+                        mkdir -p "$(dirname "$KUBECONFIG")"
+
+                       aws eks update-kubeconfig \
+                        --name "$CLUSTER_NAME" \
+                      --region "$AWS_DEFAULT_REGION" \
+                      --kubeconfig "$KUBECONFIG"
+                    '''
+                }
+            }
+        }
+
+        // 17. VERIFICATION KUBERNETES
+        stage('17. Verify Kubernetes') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    sh '''
+                        echo "Identite AWS"
+                        aws sts get-caller-identity
+
+                        echo "CIDR autorise"
+                        aws eks describe-cluster \
+                            --name "$CLUSTER_NAME" \
+                            --region "$AWS_DEFAULT_REGION" \
+                            --query "cluster.resourcesVpcConfig.publicAccessCidrs" \
+                            --output json
+
+                        echo "Adresse IP publique de Jenkins"
+                        curl -s https://checkip.amazonaws.com
+
+                        echo "Noeuds Kubernetes"
+                        kubectl get nodes
+
+                        echo "Pods Kubernetes"
+                        kubectl get pods -A
+                    '''
+                }
+            }
+        }
+
+        // 18. DEPLOIEMENT APPLICATION
+        stage('18. Deploy to Kubernetes') {
+            steps {
+                withCredentials([
+                    file(
+                        credentialsId: 'aws-credentials',
+                        variable: 'AWS_SHARED_CREDENTIALS_FILE'
+                    )
+                ]) {
+                    sh '''
+                        test -f deployment.yaml
+                        test -f service.yaml
+
+                        # Verifier qu'un noeud est disponible
+                        kubectl wait --for=condition=Ready nodes \
+                            --all --timeout=120s
+
+                        kubectl apply -f deployment.yaml
+                        kubectl apply -f service.yaml
+
+                        # Utiliser l'image construite dans cette pipeline
+                        kubectl set image deployment/event-app \
+                            event-app=${DOCKER_IMAGE}:${BUILD_NUMBER}
+
+                        # L'application Spring Boot ecoute sur le port 8080
+                        kubectl patch deployment event-app --type=strategic \
+                            -p '{"spec":{"template":{"spec":{"containers":[{"name":"event-app","ports":[{"containerPort":8080}]}]}}}}'
+
+                        kubectl patch service event-service --type=strategic \
+                            -p '{"spec":{"ports":[{"port":80,"targetPort":8080,"nodePort":30080}]}}'
+
+                        kubectl rollout status deployment/event-app \
+                            --timeout=180s
+
+                        kubectl get pods
+                        kubectl get services
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline complete : Maven, SonarQube, Nexus, Docker, Terraform et Kubernetes.'
+        }
+        failure {
+            echo 'Pipeline failed. Consulte Console Output pour identifier le probleme.'
+        }
+    }
+}

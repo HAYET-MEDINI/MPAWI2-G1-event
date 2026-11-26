@@ -1,3 +1,4 @@
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,7 +14,7 @@ spec:
         app: event-app
     spec:
       containers:
-      - name: event-app
-        image: nginx:latest
-        ports:
-        - containerPort: 80
+        - name: event-app
+          image: mayssahamdanii/docker-spring-boot:latest
+          ports:
+            - containerPort: 8080

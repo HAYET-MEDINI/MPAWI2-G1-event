@@ -1,0 +1,14 @@
+(
+echo apiVersion: v1
+echo kind: Service
+echo metadata:
+echo   name: event-service
+echo spec:
+echo   type: NodePort
+echo   selector:
+echo     app: event-app
+echo   ports:
+echo   - port: 80
+echo     targetPort: 80
+echo     nodePort: 30080
+) > service.yaml

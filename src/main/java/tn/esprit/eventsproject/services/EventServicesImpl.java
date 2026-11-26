@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import tn.esprit.eventsproject.entities.Event;
 import tn.esprit.eventsproject.entities.Logistics;
 import tn.esprit.eventsproject.entities.Participant;
@@ -95,6 +98,44 @@ public class EventServicesImpl implements IEventServices{
             }
         }
         return logisticsList;
+    }
+
+    @Override
+    public List<Logistics> getAllLogistics() {
+        return logisticsRepository.findAll();
+    }
+
+    @Override
+    public Logistics getLogisticsById(int id) {
+        return logisticsRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Logistics not found: " + id));
+    }
+
+    @Override
+    public Logistics createLogistics(Logistics logistics) {
+        logistics.setIdLog(0);
+        return logisticsRepository.save(logistics);
+    }
+
+    @Override
+    public Logistics updateLogistics(int id, Logistics logistics) {
+        getLogisticsById(id);
+        logistics.setIdLog(id);
+        return logisticsRepository.save(logistics);
+    }
+
+    @Override
+    @Transactional
+    public void deleteLogistics(int id) {
+        Logistics logistics = getLogisticsById(id);
+        for (Event event : eventRepository.findAll()) {
+            if (event.getLogistics() != null
+                    && event.getLogistics().removeIf(item -> item.getIdLog() == id)) {
+                eventRepository.save(event);
+            }
+        }
+        logisticsRepository.delete(logistics);
     }
 
     @Scheduled(cron = "*/60 * * * * *")

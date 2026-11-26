@@ -164,6 +164,79 @@ class EventServicesImplTest {
         assertTrue(result.isEmpty());
     }
 
+    @Test
+    void testGetAllLogistics() {
+        List<Logistics> expected = Collections.singletonList(logistics);
+        when(logisticsRepository.findAll()).thenReturn(expected);
+
+        assertSame(expected, eventServices.getAllLogistics());
+    }
+
+    @Test
+    void testGetLogisticsById() {
+        when(logisticsRepository.findById(1)).thenReturn(Optional.of(logistics));
+
+        assertSame(logistics, eventServices.getLogisticsById(1));
+    }
+
+    @Test
+    void testGetLogisticsByIdNotFound() {
+        when(logisticsRepository.findById(42)).thenReturn(Optional.empty());
+
+        assertEquals(404, assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> eventServices.getLogisticsById(42)).getRawStatusCode());
+    }
+
+    @Test
+    void testCreateLogistics() {
+        logistics.setIdLog(99);
+        when(logisticsRepository.save(logistics)).thenReturn(logistics);
+
+        Logistics result = eventServices.createLogistics(logistics);
+
+        assertSame(logistics, result);
+        assertEquals(0, logistics.getIdLog());
+        verify(logisticsRepository).save(logistics);
+    }
+
+    @Test
+    void testUpdateLogistics() {
+        Logistics update = new Logistics();
+        update.setDescription("Updated");
+        when(logisticsRepository.findById(1)).thenReturn(Optional.of(logistics));
+        when(logisticsRepository.save(update)).thenReturn(update);
+
+        Logistics result = eventServices.updateLogistics(1, update);
+
+        assertSame(update, result);
+        assertEquals(1, update.getIdLog());
+        verify(logisticsRepository).save(update);
+    }
+
+    @Test
+    void testDeleteLogisticsAlsoUnlinksItFromEvents() {
+        event.setLogistics(new HashSet<>(Collections.singletonList(logistics)));
+        when(logisticsRepository.findById(1)).thenReturn(Optional.of(logistics));
+        when(eventRepository.findAll()).thenReturn(Collections.singletonList(event));
+
+        eventServices.deleteLogistics(1);
+
+        assertTrue(event.getLogistics().isEmpty());
+        verify(eventRepository).save(event);
+        verify(logisticsRepository).delete(logistics);
+    }
+
+    @Test
+    void testDeleteLogisticsNotFound() {
+        when(logisticsRepository.findById(42)).thenReturn(Optional.empty());
+
+        assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> eventServices.deleteLogistics(42));
+        verify(logisticsRepository, never()).deleteById(42);
+    }
+
     // 7. Calculer le coût d'un événement
     @Test
     void testCalculCout() {

@@ -13,5 +13,10 @@ public interface IEventServices {
     public Event addAffectEvenParticipant(Event event);
     public Logistics addAffectLog(Logistics logistics, String descriptionEvent);
     public List<Logistics> getLogisticsDates(LocalDate date_debut, LocalDate date_fin);
+    public List<Logistics> getAllLogistics();
+    public Logistics getLogisticsById(int id);
+    public Logistics createLogistics(Logistics logistics);
+    public Logistics updateLogistics(int id, Logistics logistics);
+    public void deleteLogistics(int id);
     public void calculCout();
 }

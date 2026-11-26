@@ -21,9 +21,11 @@ Application REST de gestion d’événements, développée avec Spring Boot et J
 ## Technologies
 
 - Java 21
+- Node.js 24 et npm, pour l’interface Angular
 - Spring Boot 2.7.18
 - Maven (Maven Wrapper inclus)
 - Spring Web et Spring Data JPA
+- Springdoc OpenAPI / Swagger UI
 - Lombok
 - JUnit / Spring Boot Test
 - JaCoCo pour le rapport de couverture
@@ -43,8 +45,47 @@ Le contrôleur REST principal est préfixé par `/events/event`. Les routes déf
 | `POST` | `/events/event/addEvent/{id}` | Ajouter un événement et l’associer au participant indiqué |
 | `PUT` | `/events/event/addAffectLog/{description}` | Ajouter et associer une logistique à un événement |
 | `GET` | `/events/event/getLogs/{d1}/{d2}` | Rechercher les logistiques entre deux dates (`yyyy-MM-dd`) |
+| `GET` | `/events/logistics` | Lister les logistiques |
+| `GET` | `/events/logistics/{id}` | Lire une logistique |
+| `POST` | `/events/logistics` | Créer une logistique |
+| `PUT` | `/events/logistics/{id}` | Modifier une logistique |
+| `DELETE` | `/events/logistics/{id}` | Supprimer une logistique |
 
 Le serveur utilise le port `8089` et le context path `/events`, selon `src/main/resources/application.properties`.
+
+### Interface Angular
+
+L’interface Angular se trouve dans `frontend/`. Elle propose un tableau de bord CRUD pour les logistiques et transmet ses appels API à Spring Boot avec un proxy de développement.
+
+Dans un premier terminal, démarrez Spring Boot avec H2 comme indiqué ci-dessus. Dans un second terminal :
+
+```powershell
+cd frontend
+npm start
+```
+
+Ouvrez `http://localhost:4200`. Pour compiler l’interface :
+
+```powershell
+npm run build
+```
+
+### Tester l’API avec Swagger
+
+Lancer l’application, puis ouvrir Swagger UI à `http://localhost:8089/events/swagger-ui.html`. La spécification OpenAPI est disponible à `http://localhost:8089/events/v3/api-docs`. Dans Swagger UI, ouvrir un endpoint, cliquer sur **Try it out**, remplir les paramètres ou le JSON, puis cliquer sur **Execute**.
+
+Exemple de corps JSON pour créer une logistique :
+
+```json
+{
+  "description": "Projecteur",
+  "reserve": true,
+  "prixUnit": 100.0,
+  "quantite": 2
+}
+```
+
+Le CRUD ajouté concerne les logistiques. La base configurée dans `application.properties` doit être joignable pour que les opérations persistantes fonctionnent.
 
 ## Prérequis
 
@@ -74,6 +115,14 @@ L’application est ensuite disponible à `http://localhost:8089/events`.
 ### Base de données
 
 La configuration actuelle dans `application.properties` pointe vers MySQL sur `localhost:3306`, avec la base `eventsProject`. Le `pom.xml` inclut H2, mais le connecteur MySQL est commenté. Il faut donc harmoniser la configuration et les dépendances avant un lancement local avec MySQL (ou configurer explicitement H2). Ne mettez pas de mot de passe réel dans Git : utilisez des variables d’environnement ou un gestionnaire de secrets.
+
+Pour lancer localement avec la base H2 en mémoire fournie par le profil `h2`, utilisez :
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=h2"
+```
+
+Cette base temporaire est pratique pour essayer Swagger et les routes CRUD; ses données sont perdues à l’arrêt de l’application.
 
 ## Compiler et tester
 

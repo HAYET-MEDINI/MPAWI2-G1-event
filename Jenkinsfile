@@ -249,6 +249,26 @@ pipeline {
     }
 
     post {
+        always {
+            script {
+                def recipient = env.BUILD_EMAIL_RECIPIENT?.trim()
+                if (!recipient) {
+                    error('Configure BUILD_EMAIL_RECIPIENT in Jenkins before enabling email notifications.')
+                }
+
+                def buildResult = currentBuild.currentResult ?: 'UNKNOWN'
+                emailext(
+                    to: recipient,
+                    subject: "Jenkins: ${env.JOB_NAME} #${env.BUILD_NUMBER} - ${buildResult}",
+                    body: """Le build ${env.JOB_NAME} #${env.BUILD_NUMBER} est terminé avec le statut : ${buildResult}.
+
+Le journal complet de la console est joint à cet e-mail.
+Console Jenkins : ${env.BUILD_URL}console
+""",
+                    attachLog: true
+                )
+            }
+        }
         success {
             echo 'Pipeline terminé avec succès.'
         }

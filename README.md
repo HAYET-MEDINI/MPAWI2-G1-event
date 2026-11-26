@@ -128,6 +128,12 @@ Le `Jenkinsfile` utilise le déclencheur `githubPush()` : un événement `push` 
 
 GitHub doit pouvoir joindre cette URL. Pour un Jenkins local, il faut une URL accessible depuis Internet via une configuration réseau sécurisée; `localhost` ne fonctionnera pas. Protégez Jenkins et son accès réseau avant d’exposer le point de terminaison. Le déclenchement du pipeline lance ses étapes existantes, y compris celles liées à AWS et au déploiement.
 
+### Envoyer la sortie console par e-mail
+
+Le bloc `post` du `Jenkinsfile` envoie le journal console complet en pièce jointe après chaque build, qu’il réussisse ou échoue. Il nécessite le plugin **Email Extension** (`email-ext`) et une configuration SMTP valide dans **Manage Jenkins → System → Extended E-mail Notification**. Configurez les paramètres SMTP et les identifiants dans Jenkins, jamais dans le dépôt, puis utilisez **Test configuration** pour vérifier l’envoi.
+
+Définissez également `BUILD_EMAIL_RECIPIENT` comme variable d’environnement globale dans **Manage Jenkins → System → Global properties → Environment variables** avec l’adresse du destinataire souhaité. Cette valeur n’est volontairement pas inscrite dans le `Jenkinsfile`, car le dépôt est public. Sans plugin, configuration SMTP ou destinataire, l’étape de notification échouera explicitement.
+
 ### Identifiants Jenkins attendus
 
 Les credentials sont à créer dans Jenkins; les valeurs secrètes ne doivent pas être inscrites dans le dépôt.

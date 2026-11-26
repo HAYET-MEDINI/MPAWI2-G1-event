@@ -116,6 +116,18 @@ Le `Jenkinsfile` décrit les étapes suivantes :
 6. Initialisation, validation et planification Terraform.
 7. Mise à jour du kubeconfig et application des manifestes Kubernetes.
 
+### Déclencher Jenkins avec un webhook GitHub
+
+Le `Jenkinsfile` utilise le déclencheur `githubPush()` : un événement `push` GitHub peut ainsi lancer le pipeline sans polling. Pour l’activer :
+
+1. Installer le plugin **GitHub** dans Jenkins, puis enregistrer le `Jenkinsfile` dans la branche `Hayet-Medini`.
+2. Créer/configurer un job **Pipeline** qui récupère ce dépôt et cette branche depuis SCM. Exécuter le job une première fois pour que Jenkins charge le déclencheur du `Jenkinsfile`.
+3. Dans les paramètres du dépôt GitHub, ouvrir **Settings → Webhooks → Add webhook**.
+4. Saisir l’URL Jenkins suivie de `/github-webhook/` (par exemple `https://jenkins.example.com/github-webhook/`), choisir `application/json`, puis sélectionner **Just the push event** et enregistrer.
+5. Vérifier la livraison dans la section **Recent Deliveries** du webhook GitHub et consulter la console du job Jenkins.
+
+GitHub doit pouvoir joindre cette URL. Pour un Jenkins local, il faut une URL accessible depuis Internet via une configuration réseau sécurisée; `localhost` ne fonctionnera pas. Protégez Jenkins et son accès réseau avant d’exposer le point de terminaison. Le déclenchement du pipeline lance ses étapes existantes, y compris celles liées à AWS et au déploiement.
+
 ### Identifiants Jenkins attendus
 
 Les credentials sont à créer dans Jenkins; les valeurs secrètes ne doivent pas être inscrites dans le dépôt.

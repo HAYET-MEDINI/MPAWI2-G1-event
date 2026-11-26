@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    triggers {
+        githubPush()
+    }
+
     parameters {
         booleanParam(
             name: 'DEPLOY_RELEASE',

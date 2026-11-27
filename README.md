@@ -221,27 +221,35 @@ Ne publiez jamais `terraform.tfstate`, `terraform.tfstate.backup`, les credentia
 
 ## Déploiement Kubernetes
 
-Une fois un cluster existant et accessible, les commandes de vérification usuelles sont :
+Le pipeline publie l’image `eventsproject` sur Docker Hub puis applique les manifestes de `kubernetes-manifests/`. Le déploiement active le profil H2 pour la démonstration ; les données sont en mémoire et ne sont pas conservées après le redémarrage du pod. L’image Docker Hub doit être accessible aux nœuds EKS.
 
-```bash
+Le service `eventsproject-api` est de type `LoadBalancer`, expose le port HTTP 80 et transmet les requêtes au port 8089 de Spring Boot. La création du Load Balancer AWS peut entraîner des frais. Après le succès du stage `DEPLOY TO AWS KUBERNETES`, configure le contexte local et vérifie l’adresse du service :
+
+```powershell
 aws eks update-kubeconfig --name mykubernetes --region us-east-1
-kubectl get nodes
-kubectl get pods
-kubectl get services
+kubectl get service eventsproject-api
 ```
 
-Le service des manifestes observés est de type `NodePort`, sur le port `30000`, avec un port cible `8083`. Pour le projet `eventsProject`, il faut d’abord adapter les manifestes à l’image publiée par le pipeline et au port réel `8089`. L’accès depuis Internet dépend aussi des règles réseau appliquées aux nœuds. N’exposez pas un port à tout Internet sans nécessité.
+Attends que `EXTERNAL-IP` contienne un nom DNS AWS (et ne soit plus `<pending>`). Swagger sera alors disponible à `http://<DNS-EXTERNAL-IP>/events/swagger-ui/index.html`.
+
+Pour connecter le front S3 à cette API, renseigne l’origine du backend dans `frontend/src/environments/environment.production.ts` :
+
+```typescript
+apiBaseUrl: 'http://<DNS-EXTERNAL-IP>',
+```
+
+Reconstruis ensuite le front avec `npm run build` depuis `frontend/` et synchronise `frontend/dist/frontend/browser` vers le compartiment S3. Le backend autorise l’origine du site S3 configurée par `APP_CORS_ALLOWED_ORIGIN`.
 
 ## Résultat observé
 
 Les sorties ci-dessous documentent un déploiement de démonstration. Les adresses publiques des nœuds ont été masquées, car elles sont temporaires.
 
-### Services
+### Exemple d’un ancien déploiement externe (pas `eventsProject`)
 
 ```text
-NAME                  TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)
-kubernetes            ClusterIP   10.100.0.1     <none>        443/TCP
-spring-boot-service   NodePort    10.100.21.31   <none>        8083:30000/TCP
+NAME                  TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)
+kubernetes            ClusterIP      10.100.0.1     <none>        443/TCP
+spring-boot-service   NodePort       10.100.21.31   <none>        8083:30000/TCP
 ```
 
 ### Pods

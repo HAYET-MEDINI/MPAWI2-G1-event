@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { environment } from '../environments/environment';
 
 export interface Logistics {
   idLog: number;
@@ -13,7 +14,7 @@ export interface Logistics {
 @Injectable({ providedIn: 'root' })
 export class LogisticsApiService {
   private readonly http = inject(HttpClient);
-  private readonly endpoint = '/events/logistics';
+  private readonly endpoint = `${environment.apiBaseUrl}/events/logistics`;
 
   getAll(): Observable<Logistics[]> {
     return this.http.get<Logistics[]>(this.endpoint);

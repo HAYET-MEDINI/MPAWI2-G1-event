@@ -224,22 +224,43 @@ pipeline {
 
         stage('DEPLOY TO AWS KUBERNETES') {
             steps {
-                withCredentials([file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE')]) {
+                withCredentials([
+                    file(credentialsId: 'aws-credentials', variable: 'AWS_SHARED_CREDENTIALS_FILE'),
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKERHUB_USER',
+                        passwordVariable: 'DOCKERHUB_TOKEN'
+                    )
+                ]) {
                     withEnv([
                         'AWS_DEFAULT_REGION=us-east-1',
                         "PATH+AWSCLI=${env.AWS_CLI_HOME}"
                     ]) {
                         dir('kubernetes-manifests') {
-                            git branch: 'master', url: 'https://gitlab.com/ThourayaLouati/docker-spring-boot.git'
-                            bat '''
-                                @echo off
-                                set "KUBECONFIG=%WORKSPACE%\\.kube\\config"
-                                kubectl apply -f deployment.yaml
-                                if errorlevel 1 exit /b %ERRORLEVEL%
-                                kubectl apply -f service.yaml
-                                if errorlevel 1 exit /b %ERRORLEVEL%
-                                kubectl rollout status deployment/my-spring-boot-app --timeout=180s
-                            '''
+                            script {
+                                def image = "${env.DOCKERHUB_USER}/eventsproject:${env.BUILD_NUMBER}"
+                                def deployment = readFile('deployment.yaml')
+                                        .replace('__EVENTS_PROJECT_IMAGE__', image)
+                                writeFile(file: 'deployment-rendered.yaml', text: deployment)
+                                try {
+                                    bat '''
+                                        @echo off
+                                        set "KUBECONFIG=%WORKSPACE%\\.kube\\config"
+                                        kubectl apply -f deployment-rendered.yaml
+                                        if errorlevel 1 exit /b %ERRORLEVEL%
+                                        kubectl apply -f service.yaml
+                                        if errorlevel 1 exit /b %ERRORLEVEL%
+                                        kubectl rollout status deployment/eventsproject-api --timeout=300s
+                                        if errorlevel 1 exit /b %ERRORLEVEL%
+                                        kubectl get service eventsproject-api
+                                    '''
+                                } finally {
+                                    bat '''
+                                        @echo off
+                                        if exist deployment-rendered.yaml del /q deployment-rendered.yaml
+                                    '''
+                                }
+                            }
                         }
                     }
                 }

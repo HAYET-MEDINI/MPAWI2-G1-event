@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eventsproject-api
+  labels:
+    app: eventsproject-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eventsproject-api
+  template:
+    metadata:
+      labels:
+        app: eventsproject-api
+    spec:
+      containers:
+        - name: eventsproject-api
+          image: __EVENTS_PROJECT_IMAGE__
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8089
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: h2
+            - name: APP_CORS_ALLOWED_ORIGIN
+              value: http://eventsproject-frontend-hayet-2026-7391.s3-website-us-east-1.amazonaws.com
+          readinessProbe:
+            tcpSocket:
+              port: 8089
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8089
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi

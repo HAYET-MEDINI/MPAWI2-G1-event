@@ -3,13 +3,17 @@ package tn.esprit.eventsproject.controllers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.core.env.Environment;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.web.servlet.MockMvc;
 import tn.esprit.eventsproject.repositories.LogisticsRepository;
 
 import java.util.HashMap;
@@ -18,6 +22,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -30,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
                 "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
                 "spring.jpa.hibernate.ddl-auto=create-drop"
         })
+@AutoConfigureMockMvc
 class LogisticsRestControllerIntegrationTest {
 
     @LocalServerPort
@@ -40,6 +48,12 @@ class LogisticsRestControllerIntegrationTest {
 
     @Autowired
     private LogisticsRepository logisticsRepository;
+
+    @Autowired
+    private Environment environment;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @BeforeEach
     void clearLogistics() {
@@ -94,6 +108,18 @@ class LogisticsRestControllerIntegrationTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertTrue(response.getBody().contains("/logistics"));
+    }
+
+    @Test
+    void allowsCorsPreflightFromS3Frontend() throws Exception {
+        String origin = "http://eventsproject-frontend-hayet-2026-7391.s3-website-us-east-1.amazonaws.com";
+        assertEquals(origin, environment.getProperty("app.cors.allowed-origin"));
+        mockMvc.perform(options("/events/logistics")
+                        .contextPath("/events")
+                        .header(HttpHeaders.ORIGIN, origin)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, origin));
     }
 
     private String url(String path) {
